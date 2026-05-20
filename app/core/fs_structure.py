@@ -1,0 +1,82 @@
+"""
+Balance Sheet and P&L face-sheet line item structure.
+Each entry: (label, note_ref, code_prefix, level, is_total)
+code_prefix is used to sum TB values matching that prefix.
+If code_prefix is None, the line is computed from other lines.
+"""
+
+BS_STRUCTURE = [
+    # Equity & Liabilities
+    ("EQUITY AND LIABILITIES", "", None, 1, False),
+    ("1. Shareholders' Funds", "", None, 2, False),
+    ("  (a) Share Capital", "A", "BS-EL-01-01", 3, False),
+    ("  (b) Reserves and Surplus", "B", "BS-EL-01-02", 3, False),
+    ("  (c) Money Against Share Warrants", "", "BS-EL-01-03", 3, False),
+    ("2. Share Application Money Pending Allotment", "", "BS-EL-02", 2, False),
+    ("3. Non-Current Liabilities", "", None, 2, False),
+    ("  (a) Long-Term Borrowings", "C", "BS-EL-03-01", 3, False),
+    ("  (b) Deferred Tax Liabilities (Net)", "", "BS-EL-03-02", 3, False),
+    ("  (c) Other Long-Term Liabilities", "D", "BS-EL-03-03", 3, False),
+    ("  (d) Long-Term Provisions", "E", "BS-EL-03-04", 3, False),
+    ("4. Current Liabilities", "", None, 2, False),
+    ("  (a) Short-Term Borrowings", "F", "BS-EL-04-01", 3, False),
+    ("  (b) Trade Payables", "FA", "BS-EL-04-02", 3, False),
+    ("     (A) Total MSME", "", "BS-EL-04-02-MSME", 4, False),
+    ("     (B) Total Others", "", "BS-EL-04-02-OTH", 4, False),
+    ("  (c) Other Current Liabilities", "G", "BS-EL-04-03", 3, False),
+    ("  (d) Short-Term Provisions", "H", "BS-EL-04-04", 3, False),
+    ("TOTAL EQUITY AND LIABILITIES", "", "BS-EL-TOTAL", 1, True),
+
+    # Assets
+    ("ASSETS", "", None, 1, False),
+    ("1. Non-Current Assets", "", None, 2, False),
+    ("  (a) Property, Plant and Equipment", "", None, 3, False),
+    ("     (i) Tangible Assets", "I", "BS-AS-01-01-T", 4, False),
+    ("     (ii) Intangible Assets", "J", "BS-AS-01-01-I", 4, False),
+    ("     (iii) Capital Work-in-Progress", "", "BS-AS-01-01-15", 4, False),
+    ("     (iv) Intangible Under Development", "", "BS-AS-01-01-16", 4, False),
+    ("  (b) Non-Current Investments", "K", "BS-AS-01-02", 3, False),
+    ("  (c) Deferred Tax Assets (Net)", "", "BS-AS-01-03", 3, False),
+    ("  (d) Long-Term Loans & Advances", "L", "BS-AS-01-04", 3, False),
+    ("  (e) Other Non-Current Assets", "M", "BS-AS-01-05", 3, False),
+    ("2. Current Assets", "", None, 2, False),
+    ("  (a) Current Investments", "N", "BS-AS-02-01", 3, False),
+    ("  (b) Inventories", "O", "BS-AS-02-02", 3, False),
+    ("  (c) Trade Receivables", "P", "BS-AS-02-03", 3, False),
+    ("  (d) Cash and Cash Equivalents", "Q", "BS-AS-02-04", 3, False),
+    ("  (e) Short-Term Loans & Advances", "R", "BS-AS-02-05", 3, False),
+    ("  (f) Other Current Assets", "S", "BS-AS-02-06", 3, False),
+    ("TOTAL ASSETS", "", "BS-AS-TOTAL", 1, True),
+]
+
+PL_STRUCTURE = [
+    ("I. Revenue from Operations", "Rev", "PL-01", 2, False),
+    ("II. Other Income", "OI", "PL-02", 2, False),
+    ("III. Total Revenue (I + II)", "", "PL-REVENUE", 1, True),
+    ("IV. Expenses:", "", None, 1, False),
+    ("  Cost of Materials Consumed", "Exp", "PL-04-01", 3, False),
+    ("  Purchases of Stock-in-Trade", "Exp", "PL-04-02", 3, False),
+    ("  Changes in Inventories of FG, WIP & SIT", "", "PL-04-03", 3, False),
+    ("  Employee Benefits Expense", "Emp", "PL-04-04", 3, False),
+    ("  Finance Costs", "Fin", "PL-04-05", 3, False),
+    ("  Depreciation and Amortization", "Dep", "PL-04-06", 3, False),
+    ("  Other Expenses", "OE", "PL-04-07", 3, False),
+    ("Total Expenses (IV)", "", "PL-EXPENSES", 1, True),
+    ("V. Profit Before Exceptional Items & Tax (III-IV)", "", "PL-PBT-EX", 1, True),
+    ("VI. Exceptional Items", "", "PL-06", 2, False),
+    ("VII. Profit Before Extraordinary Items (V-VI)", "", "PL-PBT-EO", 1, True),
+    ("VIII. Extraordinary Items", "", "PL-08", 2, False),
+    ("IX. Profit Before Tax (VII-VIII)", "", "PL-PBT", 1, True),
+    ("X. Tax Expense:", "", None, 2, False),
+    ("  (1) Current Tax", "Tax", "PL-10-01", 3, False),
+    ("  (2) Deferred Tax", "Tax", "PL-10-02", 3, False),
+    ("  (3) MAT Credit Entitlement", "Tax", "PL-10-03", 3, False),
+    ("XI. Profit from Continuing Operations (IX-X)", "", "PL-PAT-CONT", 1, True),
+    ("XII. Profit from Discontinuing Operations", "", None, 2, False),
+    ("XIII. Tax of Discontinuing Operations", "", None, 2, False),
+    ("XIV. Profit from Discont. Ops After Tax", "", "PL-PAT-DISC", 1, True),
+    ("XV. Profit/(Loss) for the Period (XI+XIV)", "", "PL-PAT", 1, True),
+    ("XVI. Earnings Per Equity Share:", "", None, 2, False),
+    ("  (1) Basic", "", "EPS-BASIC", 3, False),
+    ("  (2) Diluted", "", "EPS-DILUTED", 3, False),
+]

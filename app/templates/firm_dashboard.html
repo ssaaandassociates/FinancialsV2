@@ -1,0 +1,77 @@
+{% extends "base_full.html" %}
+{% block title %}SSAA Financials Tool{% endblock %}
+{% block page_title %}SSAA Financials Tool{% endblock %}
+
+{% block actions %}
+<button class="btn btn-primary" onclick="document.getElementById('newClientModal').classList.add('show')">+ New Client</button>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-4 mb-6">
+  <div class="stat-card accent"><div class="stat-label">Clients</div><div class="stat-value">{{ clients|length }}</div></div>
+  <div class="stat-card green"><div class="stat-label">Active Projects</div><div class="stat-value">{{ total_projects }}</div></div>
+  <div class="stat-card"><div class="stat-label">Ready to Export</div><div class="stat-value">{{ ready_count }}</div></div>
+  <div class="stat-card"><div class="stat-label">Exported</div><div class="stat-value">{{ exported_count }}</div></div>
+</div>
+
+<!-- Search -->
+<div class="mb-6">
+  <input type="text" class="form-control" style="max-width:400px;" placeholder="Search clients..." oninput="searchClients(this.value)">
+</div>
+
+<!-- Client Cards -->
+{% if clients %}
+<div class="client-grid" id="clientGrid">
+  {% for c in clients %}
+  <a href="/client/{{ c.id }}" class="client-card" data-name="{{ c.name|lower }}">
+    <h3>{{ c.name }}</h3>
+    <div class="meta">{{ c.cin or 'CIN not set' }} {% if c.pan %}· {{ c.pan }}{% endif %}</div>
+    <div class="stats">
+      <span>{{ c.project_count }} project{{ 's' if c.project_count != 1 }}</span>
+      {% if c.principal_activity %}<span>· {{ c.principal_activity[:30] }}</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <p style="font-size:18px;margin-bottom:8px;">No clients yet</p>
+  <p>Click "+ New Client" to get started.</p>
+</div>
+{% endif %}
+
+<!-- New Client Modal -->
+<div class="modal-bg" id="newClientModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Create New Client</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+    <form onsubmit="createClient(event)">
+      <div class="modal-body">
+        <div class="form-group"><label>Company Name *</label><input type="text" name="name" class="form-control" required></div>
+        <div class="grid grid-2">
+          <div class="form-group"><label>CIN</label><input type="text" name="cin" class="form-control"></div>
+          <div class="form-group"><label>PAN</label><input type="text" name="pan" class="form-control"></div>
+        </div>
+        <div class="form-group"><label>Registered Address</label><input type="text" name="registered_office" class="form-control"></div>
+        <div class="form-group"><label>Principal Activity</label><input type="text" name="principal_activity" class="form-control"></div>
+        <div class="grid grid-2">
+          <div class="form-group"><label>Face Value (Rs.)</label><input type="number" name="face_value" class="form-control" value="10"></div>
+          <div class="form-group"><label>Paid-up Capital</label><input type="number" name="paid_up_capital" class="form-control" value="0"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Client</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function searchClients(q){q=q.toLowerCase();document.querySelectorAll('.client-card').forEach(c=>{c.style.display=c.dataset.name.includes(q)?'':'none';})}
+async function createClient(e){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));d.face_value=Number(d.face_value)||10;d.paid_up_capital=Number(d.paid_up_capital)||0;
+  const r=await fetch('/api/clients/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+  if(r.ok){const j=await r.json();location.href='/client/'+j.id;}else alert('Error: '+(await r.json()).detail);}
+</script>
+{% endblock %}

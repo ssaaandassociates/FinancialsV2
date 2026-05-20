@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pandas
+openpyxl
+sqlalchemy
+python-multipart
+jinja2
+aiofiles
+reportlab
+python-docx

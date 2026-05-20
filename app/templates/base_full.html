@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}SSAA Financials Tool{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="shell-full">
+  <header class="topbar">
+    <div>
+      <h2 style="display:inline;">{% block page_title %}SSAA Financials Tool{% endblock %}</h2>
+      <div class="breadcrumb" style="margin-top:4px;">{% block breadcrumb %}{% endblock %}</div>
+    </div>
+    <div class="topbar-actions">
+      {% block actions %}{% endblock %}
+      <a href="/logout" class="btn btn-sm btn-outline">Logout</a>
+    </div>
+  </header>
+  <div class="main-full">
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,203 @@
+{% extends "base_full.html" %}
+{% block title %}{{ client.name }} — SSAA Financials{% endblock %}
+{% block page_title %}{{ client.name }}{% endblock %}
+{% block breadcrumb %}<a href="/">Home</a><span>›</span>{{ client.name }}{% endblock %}
+
+{% block actions %}
+<button class="btn btn-gold" onclick="document.getElementById('newProjectModal').classList.add('show')">+ New Project</button>
+<button class="btn btn-danger btn-sm" onclick="deleteClient()">Delete Client</button>
+{% endblock %}
+
+{% block content %}
+<div class="tabs mb-6">
+  <div class="tab active" onclick="showTab('master',this)">Company Master</div>
+  <div class="tab" onclick="showTab('directors',this)">Directors & KMP</div>
+  <div class="tab" onclick="showTab('shareholders',this)">Shareholders</div>
+  <div class="tab" onclick="showTab('projects',this)">Projects ({{ projects|length }})</div>
+</div>
+
+<!-- TAB: Company Master -->
+<div id="tab-master" class="tab-content">
+  <div class="card">
+    <div class="card-header"><h3>Company Information</h3><span class="save-ok" id="masterSaved">Saved ✓</span></div>
+    <div class="card-body">
+      <div class="grid grid-2">
+        <div class="form-group"><label>Company Name</label><input type="text" id="cl_name" class="form-control" value="{{ client.name }}" onchange="saveClient()"></div>
+        <div class="form-group"><label>CIN</label><input type="text" id="cl_cin" class="form-control" value="{{ client.cin or '' }}" onchange="saveClient()"></div>
+      </div>
+      <div class="grid grid-3">
+        <div class="form-group"><label>PAN</label><input type="text" id="cl_pan" class="form-control" value="{{ client.pan or '' }}" onchange="saveClient()"></div>
+        <div class="form-group"><label>GSTIN</label><input type="text" id="cl_gstin" class="form-control" value="{{ client.gstin or '' }}" onchange="saveClient()"></div>
+        <div class="form-group"><label>Face Value (Rs.)</label><input type="number" id="cl_fv" class="form-control" value="{{ client.face_value or 10 }}" onchange="saveClient()"></div>
+      </div>
+      <div class="form-group"><label>Registered Address</label><textarea id="cl_addr" class="form-control" rows="2" onchange="saveClient()">{{ client.registered_office or '' }}</textarea></div>
+      <div class="form-group"><label>Principal Activity / Main Objective</label><input type="text" id="cl_activity" class="form-control" value="{{ client.principal_activity or '' }}" onchange="saveClient()"></div>
+      <div class="grid grid-2">
+        <div class="form-group"><label>Authorised Capital</label><input type="number" id="cl_auth" class="form-control" value="{{ client.authorized_capital or 0 }}" onchange="saveClient()"></div>
+        <div class="form-group"><label>Paid-up Capital</label><input type="number" id="cl_paid" class="form-control" value="{{ client.paid_up_capital or 0 }}" onchange="saveClient()"></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="form-group"><label>Auditor Name</label><input type="text" id="cl_aud" class="form-control" value="{{ client.auditor_name or '' }}" onchange="saveClient()"></div>
+        <div class="form-group"><label>Auditor FRN</label><input type="text" id="cl_frn" class="form-control" value="{{ client.auditor_frn or '' }}" onchange="saveClient()"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: Directors & KMP -->
+<div id="tab-directors" class="tab-content" style="display:none;">
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-header"><h3>Directors</h3><button class="btn btn-gold btn-sm" onclick="document.getElementById('dirModal').classList.add('show')">+ Add</button></div>
+      {% if directors %}
+      <table class="tbl"><thead><tr><th>Name</th><th>DIN</th><th>Designation</th><th></th></tr></thead><tbody>
+        {% for d in directors %}<tr><td><strong>{{ d.name }}</strong></td><td class="code">{{ d.din }}</td><td>{{ d.designation }}</td>
+          <td><button class="btn btn-sm btn-danger" onclick="deleteDir({{ d.id }})">×</button></td></tr>{% endfor %}
+      </tbody></table>
+      {% else %}<div class="card-body"><p class="text-muted text-sm">No directors added.</p></div>{% endif %}
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Key Managerial Personnel</h3><button class="btn btn-gold btn-sm" onclick="document.getElementById('kmpModal').classList.add('show')">+ Add</button></div>
+      {% if kmp_list %}
+      <table class="tbl"><thead><tr><th>Name</th><th>Designation</th><th>PAN</th></tr></thead><tbody>
+        {% for k in kmp_list %}<tr><td><strong>{{ k.name }}</strong></td><td>{{ k.designation }}</td><td class="code">{{ k.pan or '' }}</td></tr>{% endfor %}
+      </tbody></table>
+      {% else %}<div class="card-body"><p class="text-muted text-sm">No KMP added.</p></div>{% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- TAB: Shareholders -->
+<div id="tab-shareholders" class="tab-content" style="display:none;">
+  <div class="card">
+    <div class="card-header"><h3>Shareholders</h3><button class="btn btn-gold btn-sm" onclick="document.getElementById('shModal').classList.add('show')">+ Add</button></div>
+    <div id="shList" class="card-body"><p class="text-muted text-sm">Loading...</p></div>
+  </div>
+</div>
+
+<!-- TAB: Projects -->
+<div id="tab-projects" class="tab-content" style="display:none;">
+  <div class="card">
+    <div class="card-header"><h3>Financial Year Projects</h3>
+      <button class="btn btn-gold btn-sm" onclick="document.getElementById('newProjectModal').classList.add('show')">+ New Project</button></div>
+    {% if projects %}
+    <table class="tbl"><thead><tr><th>FY</th><th>Type</th><th>Rounding</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+      {% for p in projects %}
+      <tr>
+        <td><strong>{{ p.financial_year }}</strong></td>
+        <td><span class="badge badge-blue">{{ p.company_type }}</span></td>
+        <td>{{ p.rounding }}</td>
+        <td><span class="badge {% if p.status in ['generated','exported'] %}badge-green{% elif p.status == 'mapped' %}badge-gold{% else %}badge-grey{% endif %}">{{ p.status }}</span></td>
+        <td>
+          <a href="/project/{{ p.id }}" class="btn btn-primary btn-sm">Open</a>
+          <button class="btn btn-danger btn-sm" onclick="deleteProject({{ p.id }},'{{ p.financial_year }}')">Delete</button>
+        </td>
+      </tr>{% endfor %}
+    </tbody></table>
+    {% else %}<div class="card-body"><p class="text-muted">No projects yet. Create one to start preparing financial statements.</p></div>{% endif %}
+  </div>
+</div>
+
+<!-- Modals -->
+<div class="modal-bg" id="newProjectModal"><div class="modal">
+  <div class="modal-header"><h3>Create New Project</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="createProject(event)"><div class="modal-body">
+    <div class="form-group"><label>Financial Year *</label><input type="text" name="financial_year" class="form-control" placeholder="2024-25" required onchange="autoFillDates(this.value)"></div>
+    <div class="grid grid-2">
+      <div class="form-group"><label>BS Date CY</label><input type="date" name="bs_date_cy" id="pj_cy" class="form-control"></div>
+      <div class="form-group"><label>BS Date PY</label><input type="date" name="bs_date_py" id="pj_py" class="form-control"></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="form-group"><label>Company Type</label><select name="company_type" class="form-control">
+        <option value="trading">Trading</option><option value="manufacturing">Manufacturing</option><option value="service">Service</option></select></div>
+      <div class="form-group"><label>Rounding</label><select name="rounding" class="form-control">
+        <option value="Rupees">Rupees</option><option value="Hundreds">Hundreds</option><option value="Thousands">Thousands</option><option value="Lakhs">Lakhs</option></select></div>
+    </div>
+  </div><div class="modal-footer">
+    <button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button>
+    <button type="submit" class="btn btn-gold">Create Project</button>
+  </div></form>
+</div></div>
+
+<div class="modal-bg" id="dirModal"><div class="modal">
+  <div class="modal-header"><h3>Add Director</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="addDir(event)"><div class="modal-body">
+    <div class="form-group"><label>Name *</label><input type="text" name="name" class="form-control" required></div>
+    <div class="grid grid-2">
+      <div class="form-group"><label>DIN</label><input type="text" name="din" class="form-control"></div>
+      <div class="form-group"><label>Designation</label><select name="designation" class="form-control"><option>Director</option><option>Managing Director</option><option>Whole-time Director</option><option>Independent Director</option></select></div>
+    </div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form>
+</div></div>
+
+<div class="modal-bg" id="kmpModal"><div class="modal">
+  <div class="modal-header"><h3>Add KMP</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="addKMP(event)"><div class="modal-body">
+    <div class="form-group"><label>Name *</label><input type="text" name="name" class="form-control" required></div>
+    <div class="grid grid-2">
+      <div class="form-group"><label>Designation</label><select name="designation" class="form-control"><option>CEO</option><option>CFO</option><option>Company Secretary</option><option>Manager</option></select></div>
+      <div class="form-group"><label>PAN</label><input type="text" name="pan" class="form-control"></div>
+    </div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form>
+</div></div>
+
+<div class="modal-bg" id="shModal"><div class="modal">
+  <div class="modal-header"><h3>Add Shareholder</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="addSH(event)"><div class="modal-body">
+    <div class="form-group"><label>Name *</label><input type="text" name="name" class="form-control" required></div>
+    <div class="grid grid-3">
+      <div class="form-group"><label>Shares CY</label><input type="number" name="shares_cy" class="form-control" value="0"></div>
+      <div class="form-group"><label>Shares PY</label><input type="number" name="shares_py" class="form-control" value="0"></div>
+      <div class="form-group"><label>Promoter?</label><select name="is_promoter" class="form-control"><option value="false">No</option><option value="true">Yes</option></select></div>
+    </div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form>
+</div></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CID = {{ client.id }};
+function showTab(id,el){document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).style.display='block';el.classList.add('active');if(id==='shareholders')loadSH();}
+
+function autoFillDates(fy){
+  const m=fy.match(/(\d{4})-(\d{2})/);
+  if(m){const y2=m[1].slice(0,2)+m[2];document.getElementById('pj_cy').value=y2+'-03-31';document.getElementById('pj_py').value=m[1]+'-03-31';}}
+
+async function saveClient(){
+  await fetch('/api/clients/'+CID,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    name:cl_name.value,cin:cl_cin.value,pan:cl_pan.value,gstin:cl_gstin.value,
+    registered_office:cl_addr.value,principal_activity:cl_activity.value,
+    face_value:parseFloat(cl_fv.value),authorized_capital:parseFloat(cl_auth.value),
+    paid_up_capital:parseFloat(cl_paid.value),auditor_name:cl_aud.value,auditor_frn:cl_frn.value})});
+  const s=document.getElementById('masterSaved');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),2000);}
+
+async function createProject(e){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));d.client_id=CID;
+  if(!d.bs_date_cy)delete d.bs_date_cy;if(!d.bs_date_py)delete d.bs_date_py;
+  const r=await fetch('/api/projects/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+  if(r.ok){const j=await r.json();location.href='/project/'+j.id;}else alert((await r.json()).detail);}
+
+async function deleteProject(id,fy){if(!confirm('Delete project FY '+fy+'? This will delete ALL data for this year.')){return;}
+  if(!confirm('FINAL CONFIRMATION: Delete FY '+fy+'? This cannot be undone.')){return;}
+  await fetch('/api/projects/'+id,{method:'DELETE'});location.reload();}
+
+async function deleteClient(){
+  {% if projects|length > 0 %}alert('Cannot delete client with existing projects. Delete all projects first.');return;{% endif %}
+  if(!confirm('Delete {{ client.name }}?')){return;}if(!confirm('FINAL CONFIRMATION: This cannot be undone.')){return;}
+  await fetch('/api/clients/'+CID,{method:'DELETE'});location.href='/';}
+
+async function addDir(e){e.preventDefault();const f=e.target;
+  await fetch('/api/directors/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:CID,name:f.name.value,din:f.din.value,designation:f.designation.value})});location.reload();}
+async function deleteDir(id){if(confirm('Remove?')){await fetch('/api/directors/'+id,{method:'DELETE'});location.reload();}}
+async function addKMP(e){e.preventDefault();const f=e.target;
+  await fetch('/api/kmp/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:CID,name:f.name.value,designation:f.designation.value,pan:f.pan.value})});location.reload();}
+
+async function loadSH(){const r=await fetch('/api/share-capital/0/shareholders'.replace('0','{{ projects[0].id if projects else 0 }}'));
+  if(!r.ok){document.getElementById('shList').innerHTML='<p class="text-muted">Create a project first to manage shareholders.</p>';return;}
+  const d=await r.json();let h='<table class="tbl"><thead><tr><th>Name</th><th>Shares CY</th><th>%</th><th>Promoter</th></tr></thead><tbody>';
+  (d.all_shareholders||[]).forEach(s=>{h+=`<tr><td>${s.name}</td><td class="num">${s.shares_cy.toLocaleString()}</td><td class="num">${s.pct_cy}%</td><td>${s.is_promoter?'Yes':''}</td></tr>`;});
+  h+='</tbody></table>';document.getElementById('shList').innerHTML=h;}
+async function addSH(e){e.preventDefault();const f=e.target;const pid={{ projects[0].id if projects else 0 }};
+  if(!pid){alert('Create a project first.');return;}
+  await fetch('/api/shareholders/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:pid,name:f.name.value,no_of_shares_cy:parseInt(f.shares_cy.value)||0,no_of_shares_py:parseInt(f.shares_py.value)||0,is_promoter:f.is_promoter.value==='true'})});loadSH();document.getElementById('shModal').classList.remove('show');}
+</script>
+{% endblock %}

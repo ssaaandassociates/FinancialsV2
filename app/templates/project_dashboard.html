@@ -1,0 +1,112 @@
+{% extends "base_project.html" %}
+{% set active = "project" %}
+{% block title %}FY {{ project.financial_year }} — {{ project.client_name }}{% endblock %}
+{% block page_title %}Project Dashboard — FY {{ project.financial_year }}{% endblock %}
+
+{% block actions %}
+<a href="/api/export/{{ project.id }}/excel" class="btn btn-green btn-sm">Excel</a>
+<a href="/api/export/{{ project.id }}/pdf" class="btn btn-primary btn-sm">PDF</a>
+<a href="/api/export/{{ project.id }}/docx" class="btn btn-outline btn-sm">Word</a>
+{% endblock %}
+
+{% block content %}
+<!-- Project Settings -->
+<div class="card mb-6">
+  <div class="card-header"><h3>Project Settings</h3><span class="save-ok" id="pjSaved">Saved ✓</span></div>
+  <div class="card-body">
+    <div class="grid grid-4">
+      <div class="form-group"><label>Financial Year</label><input type="text" class="form-control" value="{{ project.financial_year }}" readonly style="background:#f1f5f9;"></div>
+      <div class="form-group"><label>Company Type</label>
+        <select id="pj_type" class="form-control" onchange="saveProjectSettings()">
+          <option value="trading" {% if project.company_type == 'trading' %}selected{% endif %}>Trading</option>
+          <option value="manufacturing" {% if project.company_type == 'manufacturing' %}selected{% endif %}>Manufacturing</option>
+          <option value="service" {% if project.company_type == 'service' %}selected{% endif %}>Service</option>
+        </select></div>
+      <div class="form-group"><label>Rounding</label>
+        <select id="pj_round" class="form-control" onchange="saveProjectSettings()">
+          <option value="Rupees" {% if project.rounding == 'Rupees' %}selected{% endif %}>Rupees</option>
+          <option value="Hundreds" {% if project.rounding == 'Hundreds' %}selected{% endif %}>Hundreds</option>
+          <option value="Thousands" {% if project.rounding == 'Thousands' %}selected{% endif %}>Thousands</option>
+          <option value="Lakhs" {% if project.rounding == 'Lakhs' %}selected{% endif %}>Lakhs</option>
+        </select></div>
+      <div class="form-group"><label>Status</label>
+        <span class="badge {% if project.status in ['generated','exported'] %}badge-green{% elif project.status == 'mapped' %}badge-gold{% else %}badge-grey{% endif %}" style="display:inline-block;margin-top:8px;font-size:13px;">{{ project.status }}</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Workflow Steps -->
+<div class="grid grid-3 mb-6">
+  <a href="/project/{{ project.id }}/upload" class="stat-card accent" style="text-decoration:none;">
+    <div class="stat-label">Step 1</div>
+    <div class="stat-value" style="font-size:16px;">Upload & Map TB</div>
+    <div class="stat-sub">{{ project.tb_row_count }} ledgers uploaded, {{ mapping.completion_pct }}% mapped</div>
+    <div class="progress-bar mt-4"><div class="fill" style="width:{{ mapping.completion_pct }}%"></div></div>
+  </a>
+  <a href="/project/{{ project.id }}/data" class="stat-card" style="text-decoration:none;{% if project.status == 'setup' %}opacity:0.4;pointer-events:none;{% endif %}">
+    <div class="stat-label">Step 2</div>
+    <div class="stat-value" style="font-size:16px;">Supplementary Data</div>
+    <div class="stat-sub">PPE, Closing Stock, RP, Ageing, Share Capital</div>
+  </a>
+  <a href="/project/{{ project.id }}/enrich" class="stat-card" style="text-decoration:none;{% if project.status == 'setup' %}opacity:0.4;pointer-events:none;{% endif %}">
+    <div class="stat-label">Step 3</div>
+    <div class="stat-value" style="font-size:16px;">Notes & Disclosures</div>
+    <div class="stat-sub">Enrichment, Policies, Additional Disclosures</div>
+  </a>
+</div>
+
+<div class="grid grid-2 mb-6">
+  <a href="/project/{{ project.id }}/preview" class="stat-card green" style="text-decoration:none;">
+    <div class="stat-label">Step 4</div>
+    <div class="stat-value" style="font-size:16px;">Preview & Validate</div>
+    <div class="stat-sub">BS, PL, Notes, Validation checks</div>
+  </a>
+  <div class="card">
+    <div class="card-header"><h3>Export</h3></div>
+    <div class="card-body flex gap-4">
+      <a href="/api/export/{{ project.id }}/excel" class="btn btn-green btn-block">Excel (20 sheets)</a>
+      <a href="/api/export/{{ project.id }}/pdf" class="btn btn-primary btn-block">PDF</a>
+      <a href="/api/export/{{ project.id }}/docx" class="btn btn-outline btn-block">Word</a>
+    </div>
+  </div>
+</div>
+
+<!-- Signing Block Quick Setup -->
+<div class="card mb-6">
+  <div class="card-header"><h3>Signing Block</h3><span class="save-ok" id="signSaved">Saved ✓</span></div>
+  <div class="card-body">
+    <div class="grid grid-3">
+      <div class="form-group"><label>Auditor Firm</label><input type="text" id="s_firm" class="form-control" value="{{ signing.auditor_firm or '' }}"></div>
+      <div class="form-group"><label>Partner Name</label><input type="text" id="s_partner" class="form-control" value="{{ signing.partner_name or '' }}"></div>
+      <div class="form-group"><label>FRN</label><input type="text" id="s_frn" class="form-control" value="{{ signing.auditor_frn or '' }}"></div>
+    </div>
+    <div class="grid grid-4">
+      <div class="form-group"><label>M. No.</label><input type="text" id="s_mno" class="form-control" value="{{ signing.partner_membership_no or '' }}"></div>
+      <div class="form-group"><label>Director 1</label><input type="text" id="s_d1" class="form-control" value="{{ signing.director1_name or '' }}"></div>
+      <div class="form-group"><label>Director 2</label><input type="text" id="s_d2" class="form-control" value="{{ signing.director2_name or '' }}"></div>
+      <div class="form-group"><label>Place / Date</label>
+        <input type="text" id="s_place" class="form-control" value="{{ signing.place or '' }}" placeholder="Place" style="margin-bottom:4px;">
+        <input type="date" id="s_date" class="form-control" value="{{ signing.signing_date or '' }}">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveSigning()">Save Signing Block</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function saveProjectSettings(){
+  await fetch('/api/projects/{{ project.id }}',{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({company_type:pj_type.value,rounding:pj_round.value})});
+  const s=document.getElementById('pjSaved');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),2000);}
+
+async function saveSigning(){
+  await fetch('/api/signing/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    project_id:{{ project.id }},auditor_firm:s_firm.value,auditor_frn:s_frn.value,
+    partner_name:s_partner.value,partner_membership_no:s_mno.value,
+    director1_name:s_d1.value,director2_name:s_d2.value,place:s_place.value,
+    signing_date:s_date.value||null})});
+  const s2=document.getElementById('signSaved');s2.classList.add('show');setTimeout(()=>s2.classList.remove('show'),2000);}
+</script>
+{% endblock %}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}SSAA Financials Tool{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>SSAA Financials</h1>
+      <small>{{ project.client_name }} — {{ project.financial_year }}</small>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Workflow</div>
+      <a href="/project/{{ project.id }}" class="{% if active == 'project' %}active{% endif %}">① Dashboard</a>
+      <a href="/project/{{ project.id }}/upload" class="{% if active == 'upload' %}active{% endif %}">② Upload & Map</a>
+      <a href="/project/{{ project.id }}/data" class="{% if active == 'data' %}active{% endif %} {% if project.status == 'setup' %}nav-disabled{% endif %}">③ Supplementary Data</a>
+      <a href="/project/{{ project.id }}/enrich" class="{% if active == 'enrich' %}active{% endif %} {% if project.status in ['setup'] %}nav-disabled{% endif %}">④ Notes & Disclosures</a>
+      <a href="/project/{{ project.id }}/preview" class="{% if active == 'preview' %}active{% endif %} {% if project.status in ['setup'] %}nav-disabled{% endif %}">⑤ Preview & Export</a>
+
+      <div class="nav-section">Navigate</div>
+      <a href="/client/{{ project.client_id }}">← Client Dashboard</a>
+      <a href="/">← All Clients</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h2>{% block page_title %}Project{% endblock %}</h2>
+        <div class="breadcrumb" style="margin-top:4px;">
+          <a href="/">Home</a><span>›</span><a href="/client/{{ project.client_id }}">{{ project.client_name }}</a><span>›</span>FY {{ project.financial_year }}{% block breadcrumb_extra %}{% endblock %}
+        </div>
+      </div>
+      <div class="topbar-actions">{% block actions %}{% endblock %}</div>
+    </header>
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

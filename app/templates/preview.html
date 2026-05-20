@@ -1,0 +1,122 @@
+{% extends "base_project.html" %}
+{% set active = "preview" %}
+{% block title %}Preview & Export — {{ project.financial_year }}{% endblock %}
+{% block page_title %}⑤ Preview & Export{% endblock %}
+
+{% block actions %}
+<a href="/project/{{ project.id }}/enrich" class="btn btn-outline btn-sm">← Notes</a>
+<a href="/api/export/{{ project.id }}/excel" class="btn btn-green btn-sm">Excel</a>
+<a href="/api/export/{{ project.id }}/pdf" class="btn btn-primary btn-sm">PDF</a>
+<a href="/api/export/{{ project.id }}/docx" class="btn btn-outline btn-sm">Word</a>
+{% endblock %}
+
+{% block content %}
+<!-- Validation -->
+<div class="card mb-6">
+  <div class="card-header"><h3>Validation Summary</h3><button class="btn btn-sm btn-gold" onclick="runVal()">Run Checks</button></div>
+  <div class="card-body" id="valBox"><p class="text-muted text-sm">Click "Run Checks" to validate before export.</p></div>
+</div>
+
+{% if not bs or not pl %}
+<div class="alert alert-warning">No data to preview. Upload TB and map first.</div>
+{% else %}
+<!-- Export Bar -->
+<div class="card mb-6"><div class="card-body flex gap-4 items-center justify-between">
+  <div><strong>Export</strong><span class="text-muted text-sm" style="margin-left:8px">{{ project.client_name }} — FY {{ project.financial_year }}</span></div>
+  <div class="flex gap-2">
+    <a href="/api/export/{{ project.id }}/excel" class="btn btn-green">Excel (20 sheets)</a>
+    <a href="/api/export/{{ project.id }}/pdf" class="btn btn-primary">PDF</a>
+    <a href="/api/export/{{ project.id }}/docx" class="btn btn-outline">Word</a>
+  </div>
+</div></div>
+
+<!-- Tabs -->
+<div class="tabs mb-6">
+  <div class="tab active" onclick="showTab('bs',this)">Balance Sheet</div>
+  <div class="tab" onclick="showTab('pl',this)">Profit & Loss</div>
+  <div class="tab" onclick="showTab('notes',this)">Notes</div>
+</div>
+
+<!-- Balance Sheet -->
+<div id="tab-bs" class="tab-content">
+  <div class="card"><div class="card-header"><h3>Balance Sheet {{ proj_obj.bs_header_cy }}</h3>
+    {% if bs.is_balanced_cy %}<span class="badge badge-green">Balanced</span>{% else %}<span class="badge badge-red">Diff: {{ "{:,.0f}".format(bs.difference_cy) }}</span>{% endif %}</div>
+  <table class="fs-table">
+    <tr class="fs-head"><td></td><td>Particulars</td><td>Note</td><td class="fs-num">{{ proj_obj.bs_header_cy }}</td><td class="fs-num">{{ proj_obj.bs_header_py }}</td></tr>
+    {% for sno, text, note_ref, cy, py, level, is_total in bs.line_items %}
+    <tr class="{% if is_total and level == 1 %}fs-total{% elif is_total %}fs-subtotal{% elif level == 1 %}fs-section{% endif %}">
+      <td style="width:30px">{{ sno }}</td><td>{{ text }}</td><td class="fs-note">{{ note_ref }}</td>
+      <td class="fs-num">{% if cy is not none %}{{ "{:,.0f}".format(cy) }}{% endif %}</td>
+      <td class="fs-num">{% if py is not none %}{{ "{:,.0f}".format(py) }}{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<!-- P&L -->
+<div id="tab-pl" class="tab-content" style="display:none;">
+  <div class="card"><div class="card-header"><h3>Statement of Profit and Loss {{ proj_obj.pl_header_cy }}</h3></div>
+  <table class="fs-table">
+    <tr class="fs-head"><td></td><td>Particulars</td><td>Note</td><td class="fs-num">{{ proj_obj.pl_header_cy }}</td><td class="fs-num">{{ proj_obj.pl_header_py }}</td></tr>
+    {% for sno, text, note_ref, cy, py, level, is_total in pl.line_items %}
+    <tr class="{% if is_total %}fs-total{% endif %}">
+      <td style="width:30px">{{ sno }}</td><td>{{ text }}</td><td class="fs-note">{{ note_ref }}</td>
+      <td class="fs-num">{% if cy is not none %}{{ "{:,.0f}".format(cy) }}{% endif %}</td>
+      <td class="fs-num">{% if py is not none %}{{ "{:,.0f}".format(py) }}{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<!-- Notes -->
+<div id="tab-notes" class="tab-content" style="display:none;">
+  <div class="card mb-4"><div class="card-header"><h3>Balance Sheet Notes</h3></div><div class="card-body">
+    {% for key, note in notes.bs_notes.items() %}
+    <div class="mb-6">
+      <h4 style="font-size:13px;color:var(--navy);padding:6px 10px;background:var(--navy-pale);border-radius:4px">Note {{ key }}</h4>
+      <table class="fs-table">
+        {% for item in note['items'] %}
+        <tr><td style="width:30px;color:var(--text-muted);font-size:12px">{{ item.sno }}</td><td>{{ item.particulars }}</td>
+          <td class="fs-num">{{ "{:,.0f}".format(item.cy_amount) }}</td><td class="fs-num">{{ "{:,.0f}".format(item.py_amount) }}</td></tr>
+        {% endfor %}
+        <tr class="fs-subtotal"><td></td><td><strong>Total</strong></td>
+          <td class="fs-num"><strong>{{ "{:,.0f}".format(note['total_cy']) }}</strong></td>
+          <td class="fs-num"><strong>{{ "{:,.0f}".format(note['total_py']) }}</strong></td></tr>
+      </table>
+    </div>
+    {% endfor %}
+  </div></div>
+  <div class="card"><div class="card-header"><h3>P&L Notes</h3></div><div class="card-body">
+    {% for key, note in notes.pl_notes.items() %}
+    <div class="mb-6">
+      <h4 style="font-size:13px;color:var(--navy);padding:6px 10px;background:var(--gold-light);border-radius:4px">Note {{ key }}</h4>
+      <table class="fs-table">
+        {% for item in note['items'] %}
+        <tr><td style="width:30px">{{ item.sno }}</td><td>{{ item.particulars }}</td>
+          <td class="fs-num">{{ "{:,.0f}".format(item.cy_amount) }}</td><td class="fs-num">{{ "{:,.0f}".format(item.py_amount) }}</td></tr>
+        {% endfor %}
+        <tr class="fs-subtotal"><td></td><td><strong>Total</strong></td>
+          <td class="fs-num"><strong>{{ "{:,.0f}".format(note['total_cy']) }}</strong></td>
+          <td class="fs-num"><strong>{{ "{:,.0f}".format(note['total_py']) }}</strong></td></tr>
+      </table>
+    </div>
+    {% endfor %}
+  </div></div>
+</div>
+{% endif %}
+
+<div class="flex justify-between mt-4">
+  <a href="/project/{{ project.id }}/enrich" class="btn btn-outline">← Notes & Disclosures</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(id,el){document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).style.display='block';el.classList.add('active');}
+async function runVal(){const box=document.getElementById('valBox');box.innerHTML='<p class="text-muted">Running...</p>';
+  const r=await fetch('/api/validate/{{ project.id }}');const v=await r.json();let h='';
+  if(v.errors.length>0){h+='<div class="alert alert-danger"><strong>Errors (must fix):</strong><br>';v.errors.forEach(e=>h+='• '+e+'<br>');h+='</div>';}
+  if(v.warnings.length>0){h+='<div class="alert alert-warning"><strong>Warnings:</strong><br>';v.warnings.forEach(w=>h+='• '+w+'<br>');h+='</div>';}
+  if(v.info.length>0){h+='<div class="alert alert-info"><strong>Status:</strong><br>';v.info.forEach(i=>h+='✓ '+i+'<br>');h+='</div>';}
+  if(v.is_ready)h+='<div class="alert alert-success"><strong>Ready for export!</strong></div>';
+  box.innerHTML=h;}
+</script>
+{% endblock %}

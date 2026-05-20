@@ -1,0 +1,182 @@
+{% extends "base_project.html" %}
+{% set active = "data" %}
+{% block title %}Supplementary Data — {{ project.financial_year }}{% endblock %}
+{% block page_title %}③ Supplementary Data{% endblock %}
+
+{% block actions %}
+<a href="/project/{{ project.id }}/upload" class="btn btn-outline btn-sm">← Upload</a>
+<a href="/project/{{ project.id }}/enrich" class="btn btn-gold btn-sm">Next →</a>
+{% endblock %}
+
+{% block content %}
+<div class="tabs mb-6">
+  <div class="tab active" onclick="showTab('stock',this)">Closing Stock</div>
+  <div class="tab" onclick="showTab('ppe',this)">PPE Schedule</div>
+  <div class="tab" onclick="showTab('rp',this)">Related Party</div>
+  <div class="tab" onclick="showTab('ageing',this)">Ageing</div>
+  <div class="tab" onclick="showTab('ratio',this)">Ratio Data</div>
+</div>
+
+<div id="tab-stock" class="tab-content">
+{% if stock_types %}
+  <div class="card"><div class="card-header"><h3>Closing Stock ({{ proj_obj.company_type|title }})</h3></div>
+  <div class="card-body">
+    <div class="alert alert-info mb-4">Not in TB. Auto-adjusts P&L and BS.</div>
+    <table class="tbl"><thead><tr><th>Type</th><th>Code</th><th class="num">CY</th><th class="num">PY</th><th></th></tr></thead><tbody>
+      {% for st in stock_types %}{% set ex=closing_stock|selectattr('stock_type','equalto',st.key)|list %}{% set cs=ex[0] if ex else {} %}
+      <tr><td><strong>{{ st.label }}</strong></td><td class="code">{{ st.bs_code }}</td>
+        <td><input type="number" id="cs_cy_{{ st.key }}" class="form-control" style="width:140px;text-align:right;" value="{{ cs.get('cy_amount',0) }}"></td>
+        <td><input type="number" id="cs_py_{{ st.key }}" class="form-control" style="width:140px;text-align:right;" value="{{ cs.get('py_amount',0) }}"></td>
+        <td><button class="btn btn-sm btn-primary" onclick="saveCS('{{ st.key }}')">Save</button></td></tr>
+      {% endfor %}</tbody></table><div id="csResult" class="mt-4"></div>
+  </div></div>
+{% else %}<div class="alert alert-info">Service company — no stock.</div>{% endif %}
+</div>
+
+<div id="tab-ppe" class="tab-content" style="display:none;">
+  <div class="card"><div class="card-header"><h3>PPE Schedule</h3>
+    {% if ppe.is_valid %}<span class="badge badge-green">OK</span>{% else %}<span class="badge badge-red">{{ ppe.validation_warnings|length }} warnings</span>{% endif %}</div>
+  <div class="card-body">
+    {% if ppe.validation_warnings %}<div class="alert alert-danger mb-4">{% for w in ppe.validation_warnings %}• {{ w }}<br>{% endfor %}</div>{% endif %}
+    <div style="overflow-x:auto;">
+    <table class="tbl" style="font-size:11px;">
+      <thead><tr><th rowspan="2" style="width:130px">Asset</th>
+        <th colspan="4" style="text-align:center;background:#1a5a3a;color:white">GROSS BLOCK</th>
+        <th colspan="4" style="text-align:center;background:#8b4513;color:white">DEPRECIATION</th>
+        <th style="background:#1a3a6b;color:white">NET</th><th>TB</th></tr>
+        <tr><th class="num">Open</th><th class="num">Add</th><th class="num">Disp</th><th class="num">Close</th>
+        <th class="num">Open</th><th class="num">ForYr</th><th class="num">Disp</th><th class="num">Close</th><th class="num">CY</th><th class="num">Match</th></tr></thead>
+      <tbody>
+      <tr style="background:var(--navy)"><td colspan="12" style="color:white;font-weight:700">CURRENT YEAR</td></tr>
+      {% for grp,items in [('Tangible',ppe.tangible),('Intangible',ppe.intangible)] %}
+      <tr class="section-row"><td colspan="12"><strong>{{ grp }}</strong></td></tr>
+      {% for r in items %}<tr><td>{{ r.asset_class }}</td>
+        {% for f in ['gross_opening','gross_additions','gross_disposals'] %}<td><input type="number" style="width:70px;font-size:10px;padding:2px;text-align:right" class="form-control" value="{{ r[f] }}" id="ppe_{{ r.id }}_{{ f }}" onchange="queuePPE({{ r.id }})"></td>{% endfor %}
+        <td class="num" style="background:#e8f8e0">{{ "{:,.0f}".format(r.gross_closing) }}</td>
+        {% for f in ['dep_opening','dep_for_year','dep_on_disposals'] %}<td><input type="number" style="width:70px;font-size:10px;padding:2px;text-align:right" class="form-control" value="{{ r[f] }}" id="ppe_{{ r.id }}_{{ f }}" onchange="queuePPE({{ r.id }})"></td>{% endfor %}
+        <td class="num" style="background:#fde8d0">{{ "{:,.0f}".format(r.dep_closing) }}</td>
+        <td class="num" style="background:#e8ecf3"><strong>{{ "{:,.0f}".format(r.net_cy) }}</strong></td>
+        <td class="num {% if r.tb_matched %}text-green{% else %}text-red{% endif %}">{{ "{:,.0f}".format(r.tb_balance_cy) }}</td></tr>
+      {% endfor %}{% endfor %}
+      <tr style="background:#3a3a6b"><td colspan="12" style="color:white;font-weight:700">PREVIOUS YEAR</td></tr>
+      {% for grp,items in [('Tangible',ppe.tangible),('Intangible',ppe.intangible)] %}
+      <tr class="section-row"><td colspan="12">{{ grp }}</td></tr>
+      {% for r in items %}<tr><td>{{ r.asset_class }}</td>
+        {% for f in ['py_gross_opening','py_gross_additions','py_gross_disposals'] %}<td><input type="number" style="width:70px;font-size:10px;padding:2px;text-align:right" class="form-control" value="{{ r[f] }}" id="ppe_{{ r.id }}_{{ f }}" onchange="queuePPE({{ r.id }})"></td>{% endfor %}
+        <td class="num" style="background:#e8f8e0">{{ "{:,.0f}".format(r.py_gross_closing) }}</td>
+        {% for f in ['py_dep_opening','py_dep_for_year','py_dep_on_disposals'] %}<td><input type="number" style="width:70px;font-size:10px;padding:2px;text-align:right" class="form-control" value="{{ r[f] }}" id="ppe_{{ r.id }}_{{ f }}" onchange="queuePPE({{ r.id }})"></td>{% endfor %}
+        <td class="num" style="background:#fde8d0">{{ "{:,.0f}".format(r.py_dep_closing) }}</td>
+        <td class="num" style="background:#e8ecf3">{{ "{:,.0f}".format(r.net_py) }}</td><td></td></tr>
+      {% endfor %}{% endfor %}
+      </tbody></table></div>
+    <button class="btn btn-primary mt-4" onclick="saveAllPPE()">Save All PPE Changes</button>
+    <span class="save-ok" id="ppeSaved">Saved ✓</span>
+  </div></div>
+</div>
+
+<div id="tab-rp" class="tab-content" style="display:none;">
+  <div class="card mb-4"><div class="card-header"><h3>Related Parties</h3>
+    <button class="btn btn-gold btn-sm" onclick="document.getElementById('rpModal').classList.add('show')">+ Add</button></div>
+  <div id="rpList" class="card-body"><p class="text-muted text-sm">Click tab to load.</p></div></div>
+  <div class="card"><div class="card-header"><h3>Add Transaction</h3></div><div class="card-body">
+    <div class="grid grid-4">
+      <div class="form-group"><label>Party</label><select id="rp_party" class="form-control"><option>Loading...</option></select></div>
+      <div class="form-group"><label>Type</label><select id="rp_type" class="form-control">
+        <option>Purchase of Goods</option><option>Sale of Goods</option><option>Remuneration</option><option>Rent Paid</option>
+        <option>Interest Paid</option><option>Loans Given</option><option>Loans Taken</option><option>Outstanding Receivable</option><option>Outstanding Payable</option></select></div>
+      <div class="form-group"><label>CY</label><input type="number" id="rp_cy" class="form-control" value="0"></div>
+      <div class="form-group"><label>PY</label><input type="number" id="rp_py" class="form-control" value="0"></div>
+    </div><button class="btn btn-primary" onclick="addRPTxn()">Add</button><div id="rpR" class="mt-4"></div>
+  </div></div>
+</div>
+
+<div id="tab-ageing" class="tab-content" style="display:none;">
+  <div class="card mb-4"><div class="card-header"><h3>TR Ageing Upload</h3></div><div class="card-body">
+    <div class="alert alert-info mb-4">Columns: Party Name, Disputed(Y/N), Doubtful(Y/N), &lt;6M, 6M-1Y, 1-2Y, 2-3Y, &gt;3Y</div>
+    <form onsubmit="uploadAge(event,'TR')"><div class="flex gap-4 items-center">
+      <input type="file" name="file" class="form-control" accept=".xlsx,.csv" required style="width:300px">
+      <select name="period" class="form-control" style="width:80px"><option value="CY">CY</option><option value="PY">PY</option></select>
+      <button type="submit" class="btn btn-primary">Upload</button></div></form><div id="trR" class="mt-4"></div>
+  </div></div>
+  <div class="card"><div class="card-header"><h3>TP Ageing Upload</h3></div><div class="card-body">
+    <div class="alert alert-info mb-4">Columns: Party Name, MSME(Y/N), Disputed(Y/N), &lt;1Y, 1-2Y, 2-3Y, &gt;3Y</div>
+    <form onsubmit="uploadAge(event,'TP')"><div class="flex gap-4 items-center">
+      <input type="file" name="file" class="form-control" accept=".xlsx,.csv" required style="width:300px">
+      <select name="period" class="form-control" style="width:80px"><option value="CY">CY</option><option value="PY">PY</option></select>
+      <button type="submit" class="btn btn-primary">Upload</button></div></form><div id="tpR" class="mt-4"></div>
+  </div></div>
+</div>
+
+<div id="tab-ratio" class="tab-content" style="display:none;">
+  <div class="card"><div class="card-header"><h3>Prior Year Values for Ratio Averages</h3></div><div class="card-body">
+    <div class="alert alert-info mb-4">Enter values as at {{ proj_obj.py_date_formatted }} for average calculations. Only needed for first year.</div>
+    <div class="grid grid-3">
+      {% for k,l in [('total_equity_py1','Total Equity'),('total_debt_py1','Total Debt'),('total_current_assets_py1','Current Assets'),
+        ('total_current_liabilities_py1','Current Liabilities'),('trade_receivables_py1','Trade Receivables'),('trade_payables_py1','Trade Payables'),
+        ('inventory_py1','Inventory'),('net_worth_py1','Net Worth'),('capital_employed_py1','Capital Employed')] %}
+      <div class="form-group"><label>{{ l }}</label><input type="number" id="r_{{ k }}" class="form-control" value="{{ ratio_py1.get(k,0) }}"></div>
+      {% endfor %}</div>
+    <button class="btn btn-primary" onclick="saveRatio()">Save</button><span class="save-ok" id="ratSaved">Saved ✓</span>
+  </div></div>
+</div>
+
+<div class="modal-bg" id="rpModal"><div class="modal"><div class="modal-header"><h3>Add Related Party</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="addRP(event)"><div class="modal-body">
+    <div class="form-group"><label>Name</label><input type="text" name="name" class="form-control" required></div>
+    <div class="grid grid-2"><div class="form-group"><label>Category</label><select name="category" class="form-control"><option>KMP</option><option>Relative of KMP</option><option>Entity</option><option>Holding/Sub</option></select></div>
+    <div class="form-group"><label>Relationship</label><input type="text" name="relationship" class="form-control"></div></div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form></div></div>
+
+<div class="flex justify-between mt-4">
+  <a href="/project/{{ project.id }}/upload" class="btn btn-outline">← Upload & Map</a>
+  <a href="/project/{{ project.id }}/enrich" class="btn btn-gold">Next: Notes →</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PID={{ project.id }};
+function showTab(id,el){document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).style.display='block';el.classList.add('active');if(id==='rp')loadRP();}
+
+async function saveCS(t){const cy=parseFloat(document.getElementById('cs_cy_'+t).value)||0,py=parseFloat(document.getElementById('cs_py_'+t).value)||0;
+  await fetch('/api/closing-stock/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:PID,stock_type:t,cy_amount:cy,py_amount:py})});
+  document.getElementById('csResult').innerHTML='<div class="alert alert-success">Saved</div>';setTimeout(()=>document.getElementById('csResult').innerHTML='',2000);}
+
+// PPE — no page refresh! Batch save.
+const ppeQueue=new Set();
+function queuePPE(id){ppeQueue.add(id);}
+async function saveAllPPE(){
+  for(const id of ppeQueue){
+    const body={};
+    ['gross_opening','gross_additions','gross_disposals','dep_opening','dep_for_year','dep_on_disposals',
+     'py_gross_opening','py_gross_additions','py_gross_disposals','py_dep_opening','py_dep_for_year','py_dep_on_disposals'
+    ].forEach(f=>{const el=document.getElementById('ppe_'+id+'_'+f);if(el)body[f]=parseFloat(el.value)||0;});
+    await fetch('/api/ppe/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  }
+  ppeQueue.clear();
+  const s=document.getElementById('ppeSaved');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),2000);}
+
+async function loadRP(){const r=await fetch('/api/related-parties/'+PID);const d=await r.json();
+  let h='<table class="tbl"><thead><tr><th>Name</th><th>Category</th><th>Relationship</th></tr></thead><tbody>';
+  d.forEach(p=>{h+=`<tr><td><strong>${p.name}</strong></td><td>${p.category}</td><td>${p.relationship}</td></tr>`;});
+  h+='</tbody></table>';document.getElementById('rpList').innerHTML=h;
+  const sel=document.getElementById('rp_party');sel.innerHTML='<option value="">Select...</option>';
+  d.forEach(p=>{sel.innerHTML+=`<option value="${p.id}">${p.name}</option>`;});}
+async function addRP(e){e.preventDefault();const f=e.target;
+  await fetch('/api/related-parties/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:PID,name:f.name.value,category:f.category.value,relationship:f.relationship.value})});
+  document.getElementById('rpModal').classList.remove('show');loadRP();}
+async function addRPTxn(){const p=document.getElementById('rp_party').value;if(!p){alert('Select party');return;}
+  await fetch('/api/rp-transactions/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:PID,party_id:parseInt(p),transaction_type:rp_type.value,cy_amount:parseFloat(rp_cy.value)||0,py_amount:parseFloat(rp_py.value)||0})});
+  document.getElementById('rpR').innerHTML='<div class="alert alert-success">Added</div>';}
+
+async function uploadAge(e,t){e.preventDefault();const fd=new FormData(e.target);fd.append('ageing_type',t);fd.append('replace','true');
+  const r=await fetch('/api/ageing/'+PID+'/upload',{method:'POST',body:fd});const j=await r.json();
+  document.getElementById((t==='TR'?'tr':'tp')+'R').innerHTML=r.ok?'<div class="alert alert-success">'+j.rows_imported+' rows</div>':'<div class="alert alert-danger">Error</div>';}
+
+async function saveRatio(){const d={project_id:PID};
+  ['total_equity_py1','total_debt_py1','total_current_assets_py1','total_current_liabilities_py1','trade_receivables_py1','trade_payables_py1','inventory_py1','net_worth_py1','capital_employed_py1'
+  ].forEach(k=>{d[k]=parseFloat(document.getElementById('r_'+k).value)||0;});
+  await fetch('/api/ratio-py1/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+  const s=document.getElementById('ratSaved');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),2000);}
+</script>
+{% endblock %}
