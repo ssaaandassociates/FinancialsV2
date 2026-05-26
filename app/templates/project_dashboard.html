@@ -73,21 +73,34 @@
 
 <!-- Signing Block Quick Setup -->
 <div class="card mb-6">
-  <div class="card-header"><h3>Signing Block</h3><span class="save-ok" id="signSaved">Saved ✓</span></div>
+  <div class="card-header"><h3>Signing Block</h3>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-sm btn-gold" onclick="autoPopulateSigning()" title="Pull Auditor from Client + Directors flagged as 'signs_financials'">⚡ Auto-fill from Client</button>
+      <span class="save-ok" id="signSaved">Saved ✓</span>
+    </div>
+  </div>
   <div class="card-body">
+    <div class="alert alert-info mb-4" style="font-size:12px;">
+      Auto-fill pulls: <strong>Auditor</strong> from Client master, <strong>Director 1 &amp; 2</strong> from Directors where "Signs Financials" is ticked.
+    </div>
     <div class="grid grid-3">
       <div class="form-group"><label>Auditor Firm</label><input type="text" id="s_firm" class="form-control" value="{{ signing.auditor_firm or '' }}"></div>
       <div class="form-group"><label>Partner Name</label><input type="text" id="s_partner" class="form-control" value="{{ signing.partner_name or '' }}"></div>
       <div class="form-group"><label>FRN</label><input type="text" id="s_frn" class="form-control" value="{{ signing.auditor_frn or '' }}"></div>
     </div>
-    <div class="grid grid-4">
+    <div class="grid grid-3">
       <div class="form-group"><label>M. No.</label><input type="text" id="s_mno" class="form-control" value="{{ signing.partner_membership_no or '' }}"></div>
-      <div class="form-group"><label>Director 1</label><input type="text" id="s_d1" class="form-control" value="{{ signing.director1_name or '' }}"></div>
-      <div class="form-group"><label>Director 2</label><input type="text" id="s_d2" class="form-control" value="{{ signing.director2_name or '' }}"></div>
-      <div class="form-group"><label>Place / Date</label>
-        <input type="text" id="s_place" class="form-control" value="{{ signing.place or '' }}" placeholder="Place" style="margin-bottom:4px;">
-        <input type="date" id="s_date" class="form-control" value="{{ signing.signing_date or '' }}">
-      </div>
+      <div class="form-group"><label>UDIN</label><input type="text" id="s_udin" class="form-control" value="{{ signing.partner_udin or '' }}"></div>
+      <div class="form-group"><label>Place</label><input type="text" id="s_place" class="form-control" value="{{ signing.place or '' }}"></div>
+    </div>
+    <div class="grid grid-4">
+      <div class="form-group"><label>Director 1 Name</label><input type="text" id="s_d1" class="form-control" value="{{ signing.director1_name or '' }}"></div>
+      <div class="form-group"><label>Director 1 DIN</label><input type="text" id="s_d1din" class="form-control" value="{{ signing.director1_din or '' }}"></div>
+      <div class="form-group"><label>Director 2 Name</label><input type="text" id="s_d2" class="form-control" value="{{ signing.director2_name or '' }}"></div>
+      <div class="form-group"><label>Director 2 DIN</label><input type="text" id="s_d2din" class="form-control" value="{{ signing.director2_din or '' }}"></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="form-group"><label>Signing Date</label><input type="date" id="s_date" class="form-control" value="{{ signing.signing_date or '' }}"></div>
     </div>
     <button class="btn btn-primary" onclick="saveSigning()">Save Signing Block</button>
   </div>
@@ -104,9 +117,30 @@ async function saveProjectSettings(){
 async function saveSigning(){
   await fetch('/api/signing/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     project_id:{{ project.id }},auditor_firm:s_firm.value,auditor_frn:s_frn.value,
-    partner_name:s_partner.value,partner_membership_no:s_mno.value,
-    director1_name:s_d1.value,director2_name:s_d2.value,place:s_place.value,
-    signing_date:s_date.value||null})});
+    partner_name:s_partner.value,partner_membership_no:s_mno.value,partner_udin:s_udin.value,
+    director1_name:s_d1.value,director1_din:s_d1din.value,
+    director2_name:s_d2.value,director2_din:s_d2din.value,
+    place:s_place.value,signing_date:s_date.value||null})});
   const s2=document.getElementById('signSaved');s2.classList.add('show');setTimeout(()=>s2.classList.remove('show'),2000);}
+
+async function autoPopulateSigning(){
+  const r=await fetch('/api/signing/{{ project.id }}/auto-populate',{method:'POST'});
+  const j=await r.json();
+  if(j.error){alert('Error: '+j.error);return;}
+  if(j.signing_directors_found===0 && !j.auditor_found){
+    alert('No Auditor or signing Directors found on Client master.\n\nGo to Client Dashboard → set Auditor info and tick "Signs Financials" on at least one Director.');
+    return;
+  }
+  // Update UI
+  if(j.auditor_firm) s_firm.value=j.auditor_firm;
+  if(j.auditor_frn) s_frn.value=j.auditor_frn;
+  if(j.partner_membership_no) s_mno.value=j.partner_membership_no;
+  if(j.director1_name){s_d1.value=j.director1_name;s_d1din.value=j.director1_din||'';}
+  if(j.director2_name){s_d2.value=j.director2_name;s_d2din.value=j.director2_din||'';}
+  const msg='Auto-filled: '+(j.auditor_found?'Auditor ✓':'(no auditor on client) ')+
+            ' + '+j.signing_directors_found+' director(s)';
+  const s2=document.getElementById('signSaved');s2.textContent=msg;s2.classList.add('show');
+  setTimeout(()=>{s2.classList.remove('show');s2.textContent='Saved ✓';},3500);
+}
 </script>
 {% endblock %}

@@ -426,7 +426,7 @@ def build_pl_sheet(wb: Workbook, db: Session, project_id: int):
 
 
 def build_notes_bs_sheet(wb: Workbook, db: Session, project_id: int):
-    """Sheet 7: Notes for Balance Sheet (A through S)."""
+    """Sheet 7: Notes for Balance Sheet (A through S) with enrichment text."""
     ws = wb.create_sheet("Notes-BS")
     setup_a4(ws)
     ws.sheet_properties.tabColor = "1565C0"
@@ -437,6 +437,21 @@ def build_notes_bs_sheet(wb: Workbook, db: Session, project_id: int):
 
     notes = notes_engine.generate_all_notes(db, project_id)
     bs_notes = notes["bs_notes"]
+
+    # Load enrichments (text type with actual content)
+    enrichments = {}
+    from app.models.supplementary import NoteEnrichment
+    enr_rows = db.query(NoteEnrichment).filter(
+        NoteEnrichment.project_id == project_id,
+        NoteEnrichment.field_type == "text",
+        NoteEnrichment.value_text.isnot(None),
+        NoteEnrichment.value_text != "",
+    ).all()
+    for e in enr_rows:
+        if e.note_ref not in enrichments:
+            enrichments[e.note_ref] = []
+        label = e.field_label or e.field_key or ""
+        enrichments[e.note_ref].append(f"{label}: {e.value_text}")
 
     note_titles = {
         "A": "Share Capital", "B": "Reserves and Surplus", "C": "Long-Term Borrowings",
@@ -457,16 +472,12 @@ def build_notes_bs_sheet(wb: Workbook, db: Session, project_id: int):
         if not note:
             continue
 
-        # Note header
         section_row(ws, r, 1, f"Note {key}: {note_titles.get(key, '')}", 5)
         r += 1
-
-        # Column headers
         header_row(ws, r, [(1, ""), (2, "Particulars"), (3, ""),
                            (4, _BS_HEADER_CY), (5, _BS_HEADER_PY)])
         r += 1
 
-        # Note items
         for item in note["items"]:
             sno = item.get("sno", "")
             set_cell(ws, r, 1, sno, font=FONT_ITEM, fill=FILL_WHITE,
@@ -491,7 +502,18 @@ def build_notes_bs_sheet(wb: Workbook, db: Session, project_id: int):
                  fill=FILL_SECTION, border=BORDER_ALL, fmt=NF_AMOUNT, align=ALIGN_RIGHT)
         set_cell(ws, r, 5, round(note["total_py"], 2), font=FONT_SECTION,
                  fill=FILL_SECTION, border=BORDER_ALL, fmt=NF_AMOUNT, align=ALIGN_RIGHT)
-        r += 2  # Blank spacer row
+        r += 1
+
+        # F12: Enrichment text below note
+        enr_texts = enrichments.get(key, [])
+        for enr_text in enr_texts:
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
+            set_cell(ws, r, 1, enr_text,
+                     font=FONT_NOTE, fill=FILL_WHITE, align=ALIGN_WRAP)
+            ws.row_dimensions[r].height = 30
+            r += 1
+
+        r += 1  # Blank spacer
 
     set_column_widths(ws, {'A': 5, 'B': 35, 'C': 10, 'D': 20, 'E': 20})
     ws.freeze_panes = 'A5'
@@ -914,8 +936,8 @@ def build_ppe_sheet(wb, db=None, project_id=None):
                            'F': 13, 'G': 13, 'H': 13, 'I': 13, 'J': 14, 'K': 14})
 
 
-def build_related_party_sheet(wb):
-    """Sheet 15: Related Party Transactions (skeleton)."""
+def build_related_party_sheet(wb, db=None, project_id=None):
+    """Sheet 15: Related Party Transactions — populated from DB."""
     ws = wb.create_sheet("Related Party")
     setup_a4(ws, 'landscape')
     ws.sheet_properties.tabColor = "AD1457"
@@ -923,36 +945,79 @@ def build_related_party_sheet(wb):
     merge_title(ws, 1, _COMPANY_NAME, 11, FONT_TITLE)
     merge_title(ws, 2, "Related Party Transactions (AS-18)", 11, FONT_SUBTITLE)
 
+    # Load data from DB
+    parties_by_cat = {}
+    matrix = {}
+    txn_types_from_db = []
+    if db and project_id:
+        from app.services import related_party_engine
+        try:
+            disc = related_party_engine.generate_rp_disclosure(db, project_id)
+            parties_by_cat = disc.get("parties", {})
+            matrix = disc.get("matrix", {})
+            txn_types_from_db = disc.get("transaction_types", [])
+        except Exception:
+            pass
+
     r = 4
     section_row(ws, r, 1, "A. LIST OF RELATED PARTIES", 11)
     header_row(ws, r + 1, [(1, "Category"), (2, "Name"),
                            (3, "Relationship"), (4, "PAN/CIN")])
-    for i in range(15):
-        for c in range(1, 5):
-            set_cell(ws, r + 2 + i, c, None, font=FONT_INPUT, fill=FILL_INPUT,
-                     border=BORDER_ALL)
 
-    r2 = r + 19
-    section_row(ws, r2, 1, "B. TRANSACTION MATRIX", 11)
-    header_row(ws, r2 + 1, [
+    all_parties = []
+    for cat, plist in parties_by_cat.items():
+        for p in plist:
+            all_parties.append({"category": cat, **p})
+
+    if all_parties:
+        for i, p in enumerate(all_parties):
+            row = r + 2 + i
+            set_cell(ws, row, 1, p.get("category", ""), font=FONT_ITEM, border=BORDER_ALL)
+            set_cell(ws, row, 2, p.get("name", ""), font=FONT_ITEM, border=BORDER_ALL)
+            set_cell(ws, row, 3, p.get("relationship", ""), font=FONT_ITEM, border=BORDER_ALL)
+            set_cell(ws, row, 4, p.get("pan_cin", ""), font=FONT_ITEM, border=BORDER_ALL)
+        r = r + 2 + len(all_parties) + 2
+    else:
+        for i in range(5):
+            for c in range(1, 5):
+                set_cell(ws, r + 2 + i, c, None, font=FONT_INPUT, fill=FILL_INPUT, border=BORDER_ALL)
+        r = r + 9
+
+    section_row(ws, r, 1, "B. TRANSACTION MATRIX", 11)
+    header_row(ws, r + 1, [
         (1, "Transaction"), (2, "KMP CY"), (3, "KMP PY"),
         (4, "Relatives CY"), (5, "Relatives PY"),
         (6, "Entities CY"), (7, "Entities PY"),
         (8, "Hold/Sub CY"), (9, "Hold/Sub PY"),
         (10, "Total CY"), (11, "Total PY")
     ])
-    txns = [
-        "Purchase of Goods", "Sale of Goods", "Services Rendered", "Services Received",
+
+    txn_types = txn_types_from_db or [
+        "Purchase of Goods", "Sale of Goods", "Purchase of Services", "Sale of Services",
         "Loans Given", "Loans Taken", "Interest Paid", "Interest Received",
         "Remuneration", "Sitting Fees", "Rent Paid", "Rent Received",
         "Commission", "Guarantee Given", "Outstanding Receivable", "Outstanding Payable"
     ]
-    for i, t in enumerate(txns):
-        row = r2 + 2 + i
+
+    cat_cols = {"KMP": (2, 3), "Relative of KMP": (4, 5), "Entity": (6, 7), "Holding/Sub": (8, 9)}
+
+    for i, t in enumerate(txn_types):
+        row = r + 2 + i
         set_cell(ws, row, 1, t, font=FONT_ITEM, border=BORDER_ALL)
-        for c in range(2, 10):
-            set_cell(ws, row, c, None, font=FONT_INPUT, fill=FILL_INPUT,
-                     border=BORDER_ALL, fmt=NF_AMOUNT)
+        for c in range(2, 12):
+            set_cell(ws, row, c, None, font=FONT_ITEM, border=BORDER_ALL, fmt=NF_AMOUNT)
+
+        if t in matrix:
+            for cat, amounts in matrix[t].items():
+                if cat == "Total":
+                    continue
+                cols = cat_cols.get(cat, (6, 7))
+                cy = amounts.get("cy", 0)
+                py = amounts.get("py", 0)
+                if cy or py:
+                    set_cell(ws, row, cols[0], cy, font=FONT_ITEM, border=BORDER_ALL, fmt=NF_AMOUNT)
+                    set_cell(ws, row, cols[1], py, font=FONT_ITEM, border=BORDER_ALL, fmt=NF_AMOUNT)
+
         set_cell(ws, row, 10, f"=B{row}+D{row}+F{row}+H{row}",
                  font=FONT_COMPUTED, border=BORDER_ALL, fmt=NF_AMOUNT)
         set_cell(ws, row, 11, f"=C{row}+E{row}+G{row}+I{row}",
@@ -962,8 +1027,8 @@ def build_related_party_sheet(wb):
                            'F': 13, 'G': 13, 'H': 13, 'I': 13, 'J': 14, 'K': 14})
 
 
-def build_policies_sheet(wb):
-    """Sheet 16: Accounting Policies template."""
+def build_policies_sheet(wb, db=None, project_id=None):
+    """Sheet 16: Accounting Policies — populated from DB."""
     ws = wb.create_sheet("Acc Policies")
     setup_a4(ws)
     ws.sheet_properties.tabColor = "37474F"
@@ -971,32 +1036,54 @@ def build_policies_sheet(wb):
     merge_title(ws, 1, _COMPANY_NAME, 4, FONT_TITLE)
     merge_title(ws, 2, "Significant Accounting Policies (Note 1)", 4, FONT_SUBTITLE)
 
-    policies = [
-        ("1. Basis of Preparation",
-         "The financial statements are prepared under historical cost convention on accrual basis, "
-         "in accordance with Indian GAAP and Accounting Standards specified u/s 133 of "
-         "Companies Act 2013 read with Rule 7 of Companies (Accounts) Rules 2014."),
-        ("2. Use of Estimates", "[Customize per company]"),
-        ("3. Revenue Recognition", "[Customize]"),
-        ("4. Property, Plant and Equipment", "[Customize: Cost model, component accounting if applicable]"),
-        ("5. Depreciation", "[Customize: WDV/SLM, useful life per Schedule II]"),
-        ("6. Intangible Assets", "[Customize]"),
-        ("7. Investments", "[Customize: Cost less diminution]"),
-        ("8. Inventories", "[Customize: Lower of cost & NRV, FIFO/Weighted avg]"),
-        ("9. Employee Benefits",
-         "[Customize: Defined contribution - PF/ESI; Defined benefit - Gratuity; "
-         "Short-term - Bonus/Leave]"),
-        ("10. Borrowing Costs", "[Customize: Capitalize for qualifying assets per AS-16]"),
-        ("11. Taxation", "[Customize: Current + Deferred tax approach]"),
-        ("12. Provisions & Contingencies", "[Customize per AS-29]"),
-        ("13. Foreign Currency", "[Customize per AS-11]"),
-        ("14. Earnings Per Share",
-         "Basic EPS = PAT / Weighted avg shares. Diluted EPS considers dilutive potential shares."),
-        ("15. Cash Flow Statement", "Prepared using indirect method as per AS-3."),
-        ("16. Segment Reporting", "[Customize if applicable per AS-17]"),
-        ("17. Leases", "[Customize per AS-19]"),
-        ("18. Impairment of Assets", "[Customize per AS-28]"),
-    ]
+    # Try loading from DB: project-level first, then client-level, then defaults
+    policies = []
+    if db and project_id:
+        from app.models import Project
+        from app.models.supplementary import AccountingPolicy
+        from app.models.client import ClientPolicy
+
+        proj = db.query(Project).filter(Project.id == project_id).first()
+
+        # Check project-level policies first (if policy_changed="yes")
+        if proj and getattr(proj, 'policy_changed', 'no') == 'yes':
+            proj_policies = db.query(AccountingPolicy).filter(
+                AccountingPolicy.project_id == project_id,
+                AccountingPolicy.is_active == True
+            ).order_by(AccountingPolicy.policy_number).all()
+            policies = [(f"{p.policy_number}. {p.title}", p.body) for p in proj_policies]
+
+        # Fallback to client-level policies
+        if not policies and proj:
+            client_policies = db.query(ClientPolicy).filter(
+                ClientPolicy.client_id == proj.client_id,
+                ClientPolicy.is_active == True
+            ).order_by(ClientPolicy.policy_number).all()
+            policies = [(f"{p.policy_number}. {p.title}", p.body) for p in client_policies]
+
+    # Default policies if nothing in DB
+    if not policies:
+        policies = [
+            ("1. Basis of Preparation",
+             "The financial statements are prepared under historical cost convention on accrual basis, "
+             "in accordance with Indian GAAP and Accounting Standards specified u/s 133 of "
+             "Companies Act 2013 read with Rule 7 of Companies (Accounts) Rules 2014."),
+            ("2. Use of Estimates", "[Customize per company]"),
+            ("3. Revenue Recognition", "[Customize]"),
+            ("4. Property, Plant and Equipment", "[Customize: Cost model, component accounting if applicable]"),
+            ("5. Depreciation", "[Customize: WDV/SLM, useful life per Schedule II]"),
+            ("6. Intangible Assets", "[Customize]"),
+            ("7. Investments", "[Customize: Cost less diminution]"),
+            ("8. Inventories", "[Customize: Lower of cost & NRV, FIFO/Weighted avg]"),
+            ("9. Employee Benefits", "[Customize: Defined contribution - PF/ESI; Defined benefit - Gratuity]"),
+            ("10. Borrowing Costs", "[Customize: Capitalize for qualifying assets per AS-16]"),
+            ("11. Taxation", "[Customize: Current + Deferred tax approach]"),
+            ("12. Provisions & Contingencies", "[Customize per AS-29]"),
+            ("13. Foreign Currency", "[Customize per AS-11]"),
+            ("14. Earnings Per Share",
+             "Basic EPS = PAT / Weighted avg shares. Diluted EPS considers dilutive potential shares."),
+            ("15. Cash Flow Statement", "Prepared using indirect method as per AS-3."),
+        ]
 
     r = 4
     for title, body in policies:
@@ -1118,7 +1205,7 @@ def build_eps_sheet(wb, db: Session, project_id: int):
 
     r = 4
     section_row(ws, r, 1, "PART A: PROFIT AVAILABLE TO EQUITY SHAREHOLDERS", 5)
-    header_row(ws, r + 1, [(2, "Particulars"), (4, "CY"), (5, "PY")])
+    header_row(ws, r + 1, [(2, "Particulars"), (4, _BS_HEADER_CY), (5, _BS_HEADER_PY)])
 
     eps_a = [
         ("Profit for the Period (PAT)", eps["pat_cy"], eps["pat_py"], True),
@@ -1180,12 +1267,16 @@ def build_ratios_sheet(wb, db: Session, project_id: int):
     merge_title(ws, 1, _COMPANY_NAME, 12, FONT_TITLE)
     merge_title(ws, 2, "Ratio Analysis (Schedule III Requirement)", 12, FONT_SUBTITLE)
 
+    # D7: Use actual year labels
+    cy_label = _BS_HEADER_CY.replace("As at ", "").replace("Amount", "").strip() if _BS_HEADER_CY else "CY"
+    py_label = _BS_HEADER_PY.replace("As at ", "").replace("Amount", "").strip() if _BS_HEADER_PY else "PY"
+
     r = 4
     header_row(ws, r, [
         (1, "#"), (2, "Ratio"), (3, "Numerator"),
-        (4, "Num CY"), (5, "Num PY"),
-        (6, "Denominator"), (7, "Den CY"), (8, "Den PY"),
-        (9, "CY"), (10, "PY"), (11, "% Chg"), (12, "Explanation (if >25%)")
+        (4, f"Num {cy_label}"), (5, f"Num {py_label}"),
+        (6, "Denominator"), (7, f"Den {cy_label}"), (8, f"Den {py_label}"),
+        (9, cy_label), (10, py_label), (11, "% Chg"), (12, "Explanation (if >25%)")
     ])
 
     rs = ratio_engine.generate_ratios(db, project_id)
@@ -1319,8 +1410,8 @@ def export_full_excel(db: Session, project_id: int, output_path: str = None) -> 
     build_tp_ageing_sheet(wb, db, project_id)          # 12
     build_msme_sheet(wb)                                # 13
     build_ppe_sheet(wb, db, project_id)                 # 14
-    build_related_party_sheet(wb)                       # 15
-    build_policies_sheet(wb)                            # 16
+    build_related_party_sheet(wb, db, project_id)       # 15
+    build_policies_sheet(wb, db, project_id)            # 16
     build_addl_disclosures_sheet(wb)                    # 17
     build_eps_sheet(wb, db, project_id)                # 18
     build_ratios_sheet(wb, db, project_id)             # 19

@@ -33,30 +33,77 @@
   </div>
 </div>
 
-<!-- Mapping Table -->
+<!-- Mapping Toolbar -->
 {% if tb_rows %}
 <div class="card mb-4">
-  <div class="card-body flex gap-4 items-center">
-    <button class="btn btn-sm btn-outline" onclick="filterRows('all')">All</button>
-    <button class="btn btn-sm" style="border-color:var(--red);color:var(--red);" onclick="filterRows('unmapped')">Unmapped</button>
-    <input type="text" class="form-control" style="width:250px;" placeholder="Search..." oninput="searchFilter(this.value)">
+  <div class="card-body flex gap-4 items-center" style="flex-wrap:wrap;">
+    <!-- Unified filter bar - all AND-combined -->
+    <div style="display:flex;gap:4px;">
+      <button class="btn btn-sm filter-pill" data-fstatus="all" onclick="setStatusFilter('all')" id="fp_all">All ({{ tb_rows|length }})</button>
+      <button class="btn btn-sm filter-pill" data-fstatus="unmapped" onclick="setStatusFilter('unmapped')" id="fp_unmapped" style="color:var(--red);border-color:var(--red);">Unmapped</button>
+      <button class="btn btn-sm filter-pill" data-fstatus="mapped" onclick="setStatusFilter('mapped')" id="fp_mapped" style="color:var(--green);border-color:var(--green);">Mapped</button>
+      <button class="btn btn-sm filter-pill" data-fstatus="custom" onclick="setStatusFilter('custom')" id="fp_custom" style="color:var(--blue);border-color:var(--blue);" title="Show only ledgers mapped to custom CoA codes">Custom CoA</button>
+    </div>
+    <select class="form-control" id="filterGroup" style="width:180px;font-size:12px;" onchange="applyFilters()">
+      <option value="">All Groups</option>
+      {% for g in tally_groups %}<option value="{{ g|lower }}">{{ g }}</option>{% endfor %}
+    </select>
+    <input type="text" id="filterSearch" class="form-control" style="width:200px;" placeholder="Search ledger..." oninput="applyFilters()">
+    <span class="badge badge-grey" id="filterCount" style="font-size:11px;">{{ tb_rows|length }} shown</span>
+    <button class="btn btn-sm btn-outline" onclick="clearFilters()" title="Clear all filters">✕ Clear</button>
+    <!-- C5: Copy mapping -->
+    <button class="btn btn-sm btn-outline" onclick="toggleCopyMode()" id="copyModeBtn" title="Copy mapping from one ledger to others">📋 Copy</button>
+    <!-- C6: Import from previous FY -->
+    <button class="btn btn-sm btn-outline" onclick="showImportPrev()" title="Import mapping from another project">📥 From Prev FY</button>
+    <!-- C4: Save All -->
+    <button class="btn btn-primary btn-sm" onclick="saveAll()" style="margin-left:auto;" id="saveAllBtn">💾 Save All</button>
+    <!-- C8: Download mapped TB -->
+    <a href="/api/export-mapped-tb/{{ project.id }}" class="btn btn-outline btn-sm" download>⬇ Export</a>
+  </div>
+  <!-- C5: Copy mode banner -->
+  <div id="copyBanner" style="display:none;padding:8px 16px;background:var(--blue-pale);border-top:1px solid var(--border);font-size:12px;">
+    <strong>Copy Mode:</strong> Click "Use" on a mapped row as source, then tick target rows, then click "Paste".
+    <button class="btn btn-sm btn-primary" onclick="pasteMapping()" id="pasteBtn" style="margin-left:12px;" disabled>Paste to 0 rows</button>
+    <button class="btn btn-sm btn-outline" onclick="toggleCopyMode()" style="margin-left:4px;">Cancel</button>
   </div>
 </div>
+
+<!-- C6: Import from Previous FY Modal -->
+<div class="modal-bg" id="prevFYModal"><div class="modal">
+  <div class="modal-header"><h3>Import Mapping from Previous FY</h3>
+    <button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <div class="modal-body" id="prevFYBody"><p class="text-muted">Loading projects...</p></div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button></div>
+</div></div>
+
+<!-- Mapping Table -->
 <div class="card">
-  <table class="tbl">
-    <thead><tr><th>#</th><th>Ledger</th><th>Group</th><th class="num">CY Net</th><th style="width:180px">Major Code</th><th style="width:240px">Sub-Code</th><th></th></tr></thead>
+  <table class="tbl" id="mapTable">
+    <thead><tr><th style="width:28px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" style="display:none"></th><th>#</th><th>Ledger</th><th>Group</th><th class="num">CY Net</th><th style="width:180px">Major Code</th><th style="width:240px">Sub-Code</th><th style="width:30px"></th></tr></thead>
     <tbody>
     {% for row in tb_rows %}
     {% set cm = sub_to_major.get(row.coa_code, '') %}
-    <tr class="map-row" data-code="{{ row.coa_code or '' }}" data-ledger="{{ row.ledger_name|lower }}">
+    {% set is_custom_code = row.coa_code in custom_codes_set if row.coa_code else false %}
+    <tr class="map-row" data-id="{{ row.id }}" data-code="{{ row.coa_code or '' }}" data-ledger="{{ row.ledger_name|lower }}" data-group="{{ row.tally_group|lower }}" data-iscustom="{{ '1' if is_custom_code else '0' }}">
+      <td><input type="checkbox" class="row-check" value="{{ row.id }}" style="display:none" onchange="updatePasteCount()"></td>
       <td>{{ loop.index }}</td>
       <td><strong>{{ row.ledger_name }}</strong></td>
       <td class="text-muted text-sm">{{ row.tally_group }}</td>
       <td class="num">{{ "{:,.0f}".format(row.cy_net) }}</td>
-      <td><select class="form-control" style="font-size:11px;padding:4px;" id="major_{{ row.id }}" onchange="filterSub({{ row.id }})">
-        <option value="">-- Major --</option>
-        {% for code, label in major_codes.items() %}<option value="{{ code }}" {% if cm == code %}selected{% endif %}>{{ code }} {{ label[:25] }}</option>{% endfor %}
-      </select></td>
+      <td>
+        <!-- C3: Searchable major dropdown -->
+        <div class="search-select" style="position:relative;">
+          <input type="text" class="form-control" style="font-size:11px;padding:4px;" placeholder="Search major..."
+            onfocus="showMajorDropdown(this,{{ row.id }})" oninput="filterMajorDropdown(this,{{ row.id }})"
+            value="{% if cm %}{{ cm }}{% endif %}" id="major_input_{{ row.id }}" autocomplete="off">
+          <input type="hidden" id="major_{{ row.id }}" value="{{ cm }}">
+          <div class="dropdown-list" id="major_dd_{{ row.id }}" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:6px;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+            {% for code, label in major_codes.items() %}
+            <div class="dd-opt" data-val="{{ code }}" style="padding:4px 8px;font-size:11px;cursor:pointer;" onmousedown="selectMajor({{ row.id }},'{{ code }}','{{ code }} {{ label[:25] }}')" onmouseover="this.style.background='var(--gold-light)'" onmouseout="this.style.background=''">{{ code }} {{ label[:25] }}</div>
+            {% endfor %}
+          </div>
+        </div>
+      </td>
       <td><select class="form-control" style="font-size:11px;padding:4px;" id="sub_{{ row.id }}">
         <option value="">-- Sub --</option>
         {% for c in coa_codes %}{% if c.code in sub_to_major %}
@@ -65,76 +112,223 @@
           {% if cm and c_major != cm %}style="display:none"{% endif %}>{{ c.code }} — {{ c.particulars[:35] }}</option>
         {% endif %}{% endfor %}
       </select></td>
-      <td><button class="btn btn-sm btn-primary" onclick="saveMap({{ row.id }})">✓</button></td>
+      <td><span class="map-status" id="status_{{ row.id }}">{% if row.coa_code %}✓{% endif %}</span>
+        {% if row.coa_code %}<button class="btn btn-sm src-btn" style="display:none;font-size:9px;padding:1px 6px;background:var(--blue-pale);" onclick="setSource({{ row.id }},this)">Use</button>{% endif %}</td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
 <div id="mapMsg" class="mt-4"></div>
+
+<!-- C9: Import Mapped TB -->
+<div class="card mt-4">
+  <div class="card-header"><h3>Import Mapped TB</h3><span class="badge badge-blue">Re-upload with CoA codes</span></div>
+  <div class="card-body">
+    <form id="importForm" enctype="multipart/form-data" onsubmit="importMappedTB(event)">
+      <div class="form-group"><label>Mapped TB File (must have columns: Ledger, CoA Code)</label>
+        <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required></div>
+      <button type="submit" class="btn btn-outline btn-block">Import Mapping</button>
+    </form>
+    <div id="importResult" class="mt-4"></div>
+  </div>
+</div>
 {% endif %}
 
-<!-- Audit Entries -->
-<div class="card mt-4 mb-6">
-  <div class="card-header"><h3>Audit Entries</h3>
-    <button class="btn btn-gold btn-sm" onclick="document.getElementById('auditModal').classList.add('show')">+ Add</button></div>
-  {% if audit_entries %}
-  <table class="tbl"><thead><tr><th>Narration</th><th>Dr</th><th>Cr</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead><tbody>
-    {% for e in audit_entries %}<tr><td>{{ e.narration }}</td><td class="code">{{ e.dr_coa_code }}</td><td class="code">{{ e.cr_coa_code }}</td>
-      <td class="num">{{ "{:,.0f}".format(e.amount) }}</td><td><span class="badge {% if e.status=='approved' %}badge-green{% else %}badge-gold{% endif %}">{{ e.status }}</span></td>
-      <td><button class="btn btn-sm btn-danger" onclick="delAudit({{ e.id }})">×</button></td></tr>{% endfor %}
-  </tbody></table>
-  {% else %}<div class="card-body"><p class="text-muted text-sm">No audit entries.</p></div>{% endif %}
+<!-- Audit Entries moved to its own page -->
+<div class="card mt-4 mb-6" style="border-left:3px solid var(--gold);">
+  <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <strong><i class="ti ti-clipboard-text"></i> Audit Entries</strong>
+      <div class="text-sm text-muted">Audit adjustments are now managed on a dedicated page.</div>
+    </div>
+    <a href="/project/{{ project.id }}/audit" class="btn btn-gold btn-sm">Open Audit Page <i class="ti ti-arrow-right"></i></a>
+  </div>
 </div>
 
-<div class="flex justify-between"><a href="/project/{{ project.id }}" class="btn btn-outline">← Dashboard</a><a href="/project/{{ project.id }}/data" class="btn btn-gold">Next: Supplementary Data →</a></div>
-
-<!-- Audit Modal -->
-<div class="modal-bg" id="auditModal"><div class="modal">
-  <div class="modal-header"><h3>Add Audit Entry</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
-  <form onsubmit="addAudit(event)"><div class="modal-body">
-    <div class="form-group"><label>Narration</label><input type="text" name="narration" class="form-control" required></div>
-    <div class="grid grid-2">
-      <div class="form-group"><label>Dr Major</label><select name="dr_major" class="form-control" style="font-size:11px;" onchange="filterAuditSub(this,'dr_sub')">
-        <option value="">--</option>{% for c,l in major_codes.items() %}<option value="{{ c }}">{{ c }} {{ l[:20] }}</option>{% endfor %}</select>
-        <label class="mt-4">Dr Sub-Code *</label><select name="dr_coa_code" id="dr_sub" class="form-control" style="font-size:11px;" required>
-        <option value="">--</option>{% for c in coa_codes %}{% if c.code in sub_to_major %}<option value="{{ c.code }}" data-major="{{ sub_to_major[c.code] }}">{{ c.code }} {{ c.particulars[:30] }}</option>{% endif %}{% endfor %}</select></div>
-      <div class="form-group"><label>Cr Major</label><select name="cr_major" class="form-control" style="font-size:11px;" onchange="filterAuditSub(this,'cr_sub')">
-        <option value="">--</option>{% for c,l in major_codes.items() %}<option value="{{ c }}">{{ c }} {{ l[:20] }}</option>{% endfor %}</select>
-        <label class="mt-4">Cr Sub-Code *</label><select name="cr_coa_code" id="cr_sub" class="form-control" style="font-size:11px;" required>
-        <option value="">--</option>{% for c in coa_codes %}{% if c.code in sub_to_major %}<option value="{{ c.code }}" data-major="{{ sub_to_major[c.code] }}">{{ c.code }} {{ c.particulars[:30] }}</option>{% endif %}{% endfor %}</select></div>
-    </div>
-    <div class="grid grid-2">
-      <div class="form-group"><label>Amount</label><input type="number" name="amount" class="form-control" required min="1"></div>
-      <div class="form-group"><label>Status</label><select name="status" class="form-control"><option value="proposed">Proposed</option><option value="approved">Approved</option></select></div>
-    </div>
-  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form>
-</div></div>
+<div class="flex justify-between"><a href="/project/{{ project.id }}" class="btn btn-outline">← Dashboard</a><a href="/project/{{ project.id }}/audit" class="btn btn-gold">Next: Audit Entries →</a></div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 const PID={{ project.id }};
+
+/* === C3: Searchable Major Code Dropdown === */
+function showMajorDropdown(inp,id){document.getElementById('major_dd_'+id).style.display='block';}
+function filterMajorDropdown(inp,id){
+  const q=inp.value.toLowerCase();const dd=document.getElementById('major_dd_'+id);
+  dd.style.display='block';
+  dd.querySelectorAll('.dd-opt').forEach(o=>{o.style.display=o.textContent.toLowerCase().includes(q)?'':'none';});
+}
+function selectMajor(id,val,label){
+  document.getElementById('major_input_'+id).value=val;
+  document.getElementById('major_'+id).value=val;
+  document.getElementById('major_dd_'+id).style.display='none';
+  filterSub(id);
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.search-select'))document.querySelectorAll('.dropdown-list').forEach(d=>d.style.display='none');});
+
 function filterSub(id){const m=document.getElementById('major_'+id).value;const s=document.getElementById('sub_'+id);
   for(const o of s.options){if(!o.value){o.style.display='';continue;}o.style.display=(!m||o.dataset.major===m)?'':'none';}
   if(s.value&&s.selectedOptions[0]&&s.selectedOptions[0].dataset.major!==m)s.value='';}
-function filterAuditSub(sel,subId){const m=sel.value;const s=document.getElementById(subId);
-  for(const o of s.options){if(!o.value){o.style.display='';continue;}o.style.display=(!m||o.dataset.major===m)?'':'none';}s.value='';}
+
+/* === Upload === */
 async function uploadTB(e){e.preventDefault();const btn=document.getElementById('tbBtn');btn.textContent='Uploading...';btn.disabled=true;
   const fd=new FormData(document.getElementById('tbForm'));fd.append('replace','true');
   const r=await fetch('/api/upload-tb/'+PID,{method:'POST',body:fd});const j=await r.json();
   document.getElementById('tbResult').innerHTML=r.ok?'<div class="alert alert-success">'+j.rows_saved+' rows uploaded</div>':'<div class="alert alert-danger">'+(j.detail||JSON.stringify(j))+'</div>';
   if(r.ok)setTimeout(()=>location.reload(),1200);btn.textContent='Upload & Replace';btn.disabled=false;}
+
+/* === Auto-Map === */
 async function autoMap(){const r=await fetch('/api/map/'+PID+'/auto',{method:'POST'});const j=await r.json();
   document.getElementById('mapResult').innerHTML='<div class="alert alert-success">Keyword:'+j.mapped_by_keyword+' Group:'+j.mapped_by_tally_group+' Unmapped:'+j.unmapped+'</div>';
   setTimeout(()=>location.reload(),1200);}
-async function saveMap(id){const c=document.getElementById('sub_'+id).value;if(!c){alert('Select sub-code');return;}
-  const r=await fetch('/api/map/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tb_row_id:id,coa_code:c})});
-  if(r.ok){const j=await r.json();document.getElementById('mapMsg').innerHTML='<div class="alert alert-success">'+j.ledger_name+' → '+j.new_coa_code+'</div>';setTimeout(()=>document.getElementById('mapMsg').innerHTML='',2500);}}
-function filterRows(t){document.querySelectorAll('.map-row').forEach(r=>{const c=r.dataset.code;r.style.display=t==='all'?'':t==='unmapped'?(c?'none':''):'';});}
-function searchFilter(q){q=q.toLowerCase();document.querySelectorAll('.map-row').forEach(r=>{r.style.display=r.dataset.ledger.includes(q)?'':'none';});}
-async function addAudit(e){e.preventDefault();const f=e.target;
-  await fetch('/api/audit/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:PID,narration:f.narration.value,dr_coa_code:f.dr_coa_code.value,cr_coa_code:f.cr_coa_code.value,amount:parseFloat(f.amount.value),status:f.status.value})});location.reload();}
-async function delAudit(id){if(confirm('Delete?')){await fetch('/api/audit/'+id,{method:'DELETE'});location.reload();}}
+
+/* === C4: Save All (batch) === */
+async function saveAll(){
+  const rows=document.querySelectorAll('.map-row');
+  let batch=[];let count=0;
+  rows.forEach(r=>{
+    const id=r.dataset.id;const sub=document.getElementById('sub_'+id);
+    if(sub&&sub.value){batch.push({tb_row_id:parseInt(id),coa_code:sub.value});}
+  });
+  if(batch.length===0){alert('No mappings to save.');return;}
+  const btn=document.getElementById('saveAllBtn');btn.textContent='Saving...';btn.disabled=true;
+  const r=await fetch('/api/map/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:PID,mappings:batch})});
+  const j=await r.json();
+  btn.textContent='💾 Save All';btn.disabled=false;
+  document.getElementById('mapMsg').innerHTML='<div class="alert alert-success">Saved '+j.saved+' mappings</div>';
+  setTimeout(()=>location.reload(),1500);
+}
+
+/* === UNIFIED FILTER COMBINATOR (status × group × search) === */
+let _filterStatus = 'all';   // all / unmapped / mapped / custom
+function setStatusFilter(s){
+  _filterStatus = s;
+  document.querySelectorAll('.filter-pill').forEach(b=>{
+    if(b.dataset.fstatus===s){b.classList.add('active');b.style.fontWeight='700';}
+    else{b.classList.remove('active');b.style.fontWeight='400';}
+  });
+  applyFilters();
+}
+function applyFilters(){
+  const g=(document.getElementById('filterGroup').value||'').toLowerCase();
+  const q=(document.getElementById('filterSearch').value||'').toLowerCase().trim();
+  let shown=0;
+  document.querySelectorAll('.map-row').forEach(r=>{
+    const code=r.dataset.code; const ledger=r.dataset.ledger; const grp=r.dataset.group;
+    const iscustom=r.dataset.iscustom==='1';
+    // Status filter
+    let okStatus=true;
+    if(_filterStatus==='unmapped') okStatus=!code;
+    else if(_filterStatus==='mapped') okStatus=!!code;
+    else if(_filterStatus==='custom') okStatus=iscustom;
+    // Group filter (only if a group is selected)
+    const okGroup=!g||grp===g;
+    // Search filter
+    const okSearch=!q||ledger.includes(q)||(grp&&grp.includes(q));
+    // ALL conditions must pass (AND)
+    const visible = okStatus && okGroup && okSearch;
+    r.style.display = visible ? '' : 'none';
+    if(visible) shown++;
+  });
+  const cnt=document.getElementById('filterCount');
+  if(cnt) cnt.textContent = shown + ' shown';
+}
+function clearFilters(){
+  _filterStatus='all';
+  document.querySelectorAll('.filter-pill').forEach(b=>{b.classList.remove('active');b.style.fontWeight='400';});
+  document.getElementById('filterGroup').value='';
+  document.getElementById('filterSearch').value='';
+  applyFilters();
+}
+// Init filter on page load - mark 'All' as active
+document.addEventListener('DOMContentLoaded',()=>{
+  const allBtn=document.getElementById('fp_all');
+  if(allBtn){allBtn.classList.add('active');allBtn.style.fontWeight='700';}
+});
+
+/* Backward compat (some other code may still call these) */
+function filterByGroup(g){document.getElementById('filterGroup').value=g.toLowerCase();applyFilters();}
+function filterRows(t){setStatusFilter(t);}
+function searchFilter(q){document.getElementById('filterSearch').value=q;applyFilters();}
+
+/* === C9: Import Mapped TB === */
+async function importMappedTB(e){e.preventDefault();
+  const fd=new FormData(document.getElementById('importForm'));
+  const r=await fetch('/api/import-mapped-tb/'+PID,{method:'POST',body:fd});const j=await r.json();
+  document.getElementById('importResult').innerHTML=r.ok?'<div class="alert alert-success">'+j.updated+' ledgers updated</div>':'<div class="alert alert-danger">'+(j.detail||JSON.stringify(j))+'</div>';
+  if(r.ok)setTimeout(()=>location.reload(),1500);}
+
+/* === C5: Copy-Paste Mapping === */
+let copyMode=false;let copySourceId=null;
+function toggleCopyMode(){
+  copyMode=!copyMode;
+  const btn=document.getElementById('copyModeBtn');
+  const banner=document.getElementById('copyBanner');
+  const checks=document.querySelectorAll('.row-check');
+  const selectAll=document.getElementById('selectAll');
+  const srcBtns=document.querySelectorAll('.src-btn');
+  if(copyMode){
+    btn.classList.add('active');btn.style.background='var(--blue-pale)';
+    banner.style.display='block';selectAll.style.display='';
+    checks.forEach(c=>{c.style.display='';c.checked=false;});
+    srcBtns.forEach(b=>b.style.display='inline-block');
+    copySourceId=null;
+  } else {
+    btn.classList.remove('active');btn.style.background='';
+    banner.style.display='none';selectAll.style.display='none';
+    checks.forEach(c=>{c.style.display='none';c.checked=false;});
+    srcBtns.forEach(b=>{b.style.display='none';b.classList.remove('active');});
+    document.querySelectorAll('.map-row').forEach(r=>r.style.background='');
+    copySourceId=null;
+  }
+}
+function setSource(id,el){
+  document.querySelectorAll('.src-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.map-row').forEach(r=>r.style.background='');
+  el.classList.add('active');
+  el.closest('tr').style.background='var(--blue-pale)';
+  copySourceId=id;
+  document.getElementById('pasteBtn').disabled=false;
+  updatePasteCount();
+}
+function toggleSelectAll(el){document.querySelectorAll('.row-check').forEach(c=>{c.checked=el.checked;});updatePasteCount();}
+function updatePasteCount(){
+  const n=document.querySelectorAll('.row-check:checked').length;
+  const btn=document.getElementById('pasteBtn');
+  if(btn)btn.textContent='Paste to '+n+' rows';
+}
+async function pasteMapping(){
+  if(!copySourceId){alert('Click "Use" on a mapped row first.');return;}
+  const targets=[...document.querySelectorAll('.row-check:checked')].map(c=>parseInt(c.value)).filter(id=>id!==copySourceId);
+  if(!targets.length){alert('Tick target rows to paste to.');return;}
+  const r=await fetch('/api/map/copy',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({source_tb_row_id:copySourceId,target_tb_row_ids:targets})});
+  const j=await r.json();
+  document.getElementById('mapMsg').innerHTML='<div class="alert alert-success">Copied '+j.coa_code+' to '+j.copied+' ledgers</div>';
+  setTimeout(()=>location.reload(),1500);
+}
+
+/* === C6: Import from Previous FY === */
+async function showImportPrev(){
+  document.getElementById('prevFYModal').classList.add('show');
+  const body=document.getElementById('prevFYBody');
+  body.innerHTML='<p class="text-muted">Loading...</p>';
+  const r=await fetch('/api/map/previous-projects/'+PID);
+  const projs=await r.json();
+  if(!projs.length){body.innerHTML='<p class="text-muted">No other projects found for this client.</p>';return;}
+  let html='<p class="text-sm mb-4">Select a project to copy its mapping. Ledgers with matching names will be updated.</p><table class="tbl"><thead><tr><th>FY</th><th>Ver</th><th>Mapped Ledgers</th><th></th></tr></thead><tbody>';
+  projs.forEach(p=>{html+='<tr><td><strong>'+p.financial_year+'</strong></td><td>V'+p.version+'</td><td>'+p.mapped_count+'</td><td><button class=\"btn btn-primary btn-sm\" onclick=\"doImportPrev('+p.id+')\">Import</button></td></tr>';});
+  html+='</tbody></table>';body.innerHTML=html;
+}
+async function doImportPrev(srcId){
+  if(!confirm('This will overwrite existing mappings for matching ledgers. Continue?'))return;
+  const r=await fetch('/api/map/import-previous',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({source_project_id:srcId,target_project_id:PID})});
+  const j=await r.json();
+  document.getElementById('prevFYBody').innerHTML='<div class="alert alert-success">Imported from FY '+j.source_fy+': '+j.matched+' matched, '+j.skipped+' skipped (no match)</div>';
+  setTimeout(()=>location.reload(),2000);
+}
 </script>
 {% endblock %}

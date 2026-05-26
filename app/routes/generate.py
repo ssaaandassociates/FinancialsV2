@@ -129,3 +129,62 @@ def validate_project(project_id: int, db: Session = Depends(get_db)):
         return validation_service.run_validation(db, project_id)
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+# =========================================================================
+# Section 9 V9 — Preview line drill-down
+# =========================================================================
+
+@router.get("/preview/{project_id}/line-detail")
+def line_detail(project_id: int, note_ref: str, db: Session = Depends(get_db)):
+    """
+    Return TB ledger detail for a BS/PL line.
+    Lookup: all TB rows whose coa_code maps to the given note_ref via CoA master.
+    """
+    from app.models import TrialBalance, CoAMaster
+    from app.models.client import CustomCoACode, Client
+    from app.models import Project
+
+    proj = db.query(Project).filter(Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(404, "Project not found")
+
+    # Find all CoA codes that have this note_ref
+    note_codes = {c.code for c in db.query(CoAMaster).filter(CoAMaster.note_ref == note_ref).all()}
+    # Also custom codes for this client
+    custom = db.query(CustomCoACode).filter(
+        CustomCoACode.client_id == proj.client_id,
+        CustomCoACode.note_ref == note_ref
+    ).all()
+    note_codes.update(c.code for c in custom)
+
+    if not note_codes:
+        return {"note_ref": note_ref, "ledgers": [], "total_cy": 0, "total_py": 0}
+
+    # Fetch matching TB rows
+    rows = db.query(TrialBalance).filter(
+        TrialBalance.project_id == project_id,
+        TrialBalance.coa_code.in_(list(note_codes))
+    ).all()
+
+    ledgers = []
+    total_cy = 0.0
+    total_py = 0.0
+    for r in rows:
+        cy = r.cy_net
+        py = r.py_net
+        total_cy += cy or 0
+        total_py += py or 0
+        ledgers.append({
+            "ledger_name": r.ledger_name,
+            "coa_code": r.coa_code,
+            "cy_net": cy,
+            "py_net": py,
+        })
+
+    return {
+        "note_ref": note_ref,
+        "ledgers": ledgers,
+        "total_cy": total_cy,
+        "total_py": total_py,
+    }

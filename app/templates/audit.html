@@ -1,0 +1,176 @@
+{% extends "base_project.html" %}
+{% set active = "audit" %}
+{% block title %}Audit Entries — {{ project.financial_year }}{% endblock %}
+{% block page_title %}③ Audit Entries{% endblock %}
+
+{% block actions %}
+<a href="/project/{{ project.id }}/upload" class="btn btn-outline btn-sm"><i class="ti ti-arrow-left"></i> Back</a>
+<a href="/api/audit/{{ project.id }}/export" class="btn btn-outline btn-sm" download><i class="ti ti-download"></i> Export</a>
+<a href="/project/{{ project.id }}/data" class="btn btn-gold btn-sm">Next: Supplementary →</a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header">
+    <h3>Audit Adjustments</h3>
+    <div class="flex gap-4 items-center">
+      <span class="text-sm text-muted">{{ audit_entries|length }} entries · Net: <strong>{{ "{:,.0f}".format(audit_entries|sum(attribute='amount')) }}</strong></span>
+      <button class="btn btn-gold btn-sm" onclick="openAuditModal()"><i class="ti ti-plus"></i> Add Entry</button>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-info" style="font-size:12px;">Audit adjustments are applied on top of TB before generating financial statements. Use "Approved" status for entries that should affect FS values.</div>
+  </div>
+
+  {% if audit_entries %}
+  <div style="overflow-x:auto;">
+    <table class="tbl">
+      <thead><tr><th>#</th><th>Date</th><th>Narration</th><th>Dr Code</th><th>Cr Code</th><th class="num">Amount</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for e in audit_entries %}<tr>
+          <td>{{ e.entry_no or loop.index }}</td>
+          <td class="text-sm">{{ e.date.strftime('%d-%b-%Y') if e.date else '—' }}</td>
+          <td>{{ e.narration }}</td>
+          <td class="code text-sm">{{ e.dr_coa_code }}{% if e.dr_particulars %}<br><span class="text-muted" style="font-size:10px;">{{ e.dr_particulars[:40] }}</span>{% endif %}</td>
+          <td class="code text-sm">{{ e.cr_coa_code }}{% if e.cr_particulars %}<br><span class="text-muted" style="font-size:10px;">{{ e.cr_particulars[:40] }}</span>{% endif %}</td>
+          <td class="num"><strong>{{ "{:,.0f}".format(e.amount) }}</strong></td>
+          <td>
+            <select class="form-control" style="font-size:11px;padding:2px 6px;width:110px;" onchange="changeStatus({{ e.id }},this.value)">
+              <option value="proposed" {% if e.status=='proposed' %}selected{% endif %}>Proposed</option>
+              <option value="approved" {% if e.status=='approved' %}selected{% endif %}>Approved</option>
+              <option value="rejected" {% if e.status=='rejected' %}selected{% endif %}>Rejected</option>
+            </select>
+          </td>
+          <td><div class="flex gap-2">
+            <button class="btn btn-sm btn-outline" onclick='editAudit({{ e.id }},{{ (e.narration or "")|tojson }},"{{ e.dr_coa_code }}","{{ e.cr_coa_code }}",{{ e.amount }},"{{ e.status }}","{{ e.date.isoformat() if e.date else "" }}")'><i class="ti ti-edit"></i></button>
+            <button class="btn btn-sm btn-outline" style="color:var(--red);" onclick="deleteAudit({{ e.id }})"><i class="ti ti-trash"></i></button>
+          </div></td>
+        </tr>{% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td colspan="5" class="text-right"><strong>Total approved adjustments:</strong></td>
+          <td class="num"><strong>{{ "{:,.0f}".format(audit_entries|selectattr('status','equalto','approved')|sum(attribute='amount')) }}</strong></td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body" style="text-align:center;padding:40px;">
+    <i class="ti ti-clipboard-text" style="font-size:48px;color:var(--text-muted);"></i>
+    <p class="text-muted" style="margin-top:8px;">No audit entries yet</p>
+    <p class="text-sm text-muted">Add adjustments to fix TB issues or reclassify ledgers before generating financial statements</p>
+    <button class="btn btn-gold mt-4" onclick="openAuditModal()"><i class="ti ti-plus"></i> Add First Entry</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Quick Stats -->
+<div class="grid grid-3 mb-4">
+  <div class="card"><div class="card-body" style="text-align:center;padding:14px;">
+    <div class="text-muted text-sm">Proposed</div>
+    <div style="font-size:24px;font-weight:600;color:var(--gold);">{{ audit_entries|selectattr('status','equalto','proposed')|list|length }}</div>
+  </div></div>
+  <div class="card"><div class="card-body" style="text-align:center;padding:14px;">
+    <div class="text-muted text-sm">Approved</div>
+    <div style="font-size:24px;font-weight:600;color:var(--green);">{{ audit_entries|selectattr('status','equalto','approved')|list|length }}</div>
+  </div></div>
+  <div class="card"><div class="card-body" style="text-align:center;padding:14px;">
+    <div class="text-muted text-sm">Rejected</div>
+    <div style="font-size:24px;font-weight:600;color:var(--red);">{{ audit_entries|selectattr('status','equalto','rejected')|list|length }}</div>
+  </div></div>
+</div>
+
+<div class="flex justify-between mt-4">
+  <a href="/project/{{ project.id }}/upload" class="btn btn-outline"><i class="ti ti-arrow-left"></i> Upload & Map</a>
+  <a href="/project/{{ project.id }}/data" class="btn btn-gold">Next: Supplementary Data <i class="ti ti-arrow-right"></i></a>
+</div>
+
+<!-- Audit Modal (Add/Edit) -->
+<div class="modal-bg" id="auditModal"><div class="modal" style="max-width:640px;">
+  <div class="modal-header"><h3 id="auditModalTitle">Add Audit Entry</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="saveAudit(event)"><div class="modal-body">
+    <input type="hidden" id="aud_edit_id" value="">
+    <div class="form-group"><label>Narration *</label><input type="text" id="aud_narration" class="form-control" required placeholder="e.g., Reclassify advance to other current assets"></div>
+    <div class="grid grid-2">
+      <div class="form-group">
+        <label>Dr Major Code</label>
+        <select id="aud_dr_major" class="form-control" style="font-size:12px;" onchange="filterAuditSub(this,'aud_dr_sub')">
+          <option value="">— All —</option>
+          {% for code, label in major_codes.items() %}<option value="{{ code }}">{{ code }} {{ label[:25] }}</option>{% endfor %}
+        </select>
+        <label class="mt-2">Dr Sub-Code *</label>
+        <select id="aud_dr_sub" class="form-control" style="font-size:12px;" required>
+          <option value="">— Select —</option>
+          {% for c in coa_codes %}{% if c.code in sub_to_major %}<option value="{{ c.code }}" data-major="{{ sub_to_major[c.code] }}">{{ c.code }} — {{ c.particulars[:35] }}</option>{% endif %}{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cr Major Code</label>
+        <select id="aud_cr_major" class="form-control" style="font-size:12px;" onchange="filterAuditSub(this,'aud_cr_sub')">
+          <option value="">— All —</option>
+          {% for code, label in major_codes.items() %}<option value="{{ code }}">{{ code }} {{ label[:25] }}</option>{% endfor %}
+        </select>
+        <label class="mt-2">Cr Sub-Code *</label>
+        <select id="aud_cr_sub" class="form-control" style="font-size:12px;" required>
+          <option value="">— Select —</option>
+          {% for c in coa_codes %}{% if c.code in sub_to_major %}<option value="{{ c.code }}" data-major="{{ sub_to_major[c.code] }}">{{ c.code }} — {{ c.particulars[:35] }}</option>{% endif %}{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="grid grid-3">
+      <div class="form-group"><label>Amount *</label><input type="number" id="aud_amount" class="form-control" required min="1" step="0.01"></div>
+      <div class="form-group"><label>Entry Date</label><input type="date" id="aud_date" class="form-control"></div>
+      <div class="form-group"><label>Status</label><select id="aud_status" class="form-control"><option value="proposed">Proposed</option><option value="approved">Approved</option></select></div>
+    </div>
+  </div><div class="modal-footer">
+    <button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </div></form>
+</div></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PID={{ project.id }};
+
+function filterAuditSub(sel,subId){const m=sel.value;const s=document.getElementById(subId);
+  for(const o of s.options){if(!o.value){o.style.display='';continue;}o.style.display=(!m||o.dataset.major===m)?'':'none';}
+  if(s.value && s.selectedOptions[0] && s.selectedOptions[0].style.display==='none')s.value='';}
+
+function openAuditModal(){
+  aud_edit_id.value='';aud_narration.value='';aud_dr_major.value='';aud_cr_major.value='';
+  aud_dr_sub.value='';aud_cr_sub.value='';aud_amount.value='';aud_date.value='{{ project.bs_date_cy or "" }}';aud_status.value='proposed';
+  // Show all sub-codes
+  for(const o of aud_dr_sub.options)o.style.display='';
+  for(const o of aud_cr_sub.options)o.style.display='';
+  document.getElementById('auditModalTitle').textContent='Add Audit Entry';
+  document.getElementById('auditModal').classList.add('show');
+}
+
+function editAudit(id,narration,drCode,crCode,amount,status,date){
+  aud_edit_id.value=id;aud_narration.value=narration;aud_amount.value=amount;aud_status.value=status;aud_date.value=date||'';
+  // Set major from sub
+  const drSub=[...aud_dr_sub.options].find(o=>o.value===drCode);
+  if(drSub){aud_dr_major.value=drSub.dataset.major||'';filterAuditSub(aud_dr_major,'aud_dr_sub');aud_dr_sub.value=drCode;}
+  const crSub=[...aud_cr_sub.options].find(o=>o.value===crCode);
+  if(crSub){aud_cr_major.value=crSub.dataset.major||'';filterAuditSub(aud_cr_major,'aud_cr_sub');aud_cr_sub.value=crCode;}
+  document.getElementById('auditModalTitle').textContent='Edit Audit Entry';
+  document.getElementById('auditModal').classList.add('show');
+}
+
+async function saveAudit(e){e.preventDefault();const id=aud_edit_id.value;
+  const body={project_id:PID,narration:aud_narration.value,dr_coa_code:aud_dr_sub.value,cr_coa_code:aud_cr_sub.value,amount:parseFloat(aud_amount.value),status:aud_status.value};
+  if(aud_date.value)body.entry_date=aud_date.value;
+  const url=id?'/api/audit/'+id:'/api/audit/';const method=id?'PUT':'POST';
+  const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r.ok)location.reload();else alert((await r.json()).detail);}
+
+async function deleteAudit(id){if(!confirm('Delete this audit entry?'))return;await fetch('/api/audit/'+id,{method:'DELETE'});location.reload();}
+
+async function changeStatus(id,status){await fetch('/api/audit/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});location.reload();}
+
+document.querySelectorAll('.modal-bg').forEach(m=>{m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('show');});});
+</script>
+{% endblock %}

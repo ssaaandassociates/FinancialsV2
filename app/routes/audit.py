@@ -71,6 +71,42 @@ def update_audit(entry_id: int, payload: AuditUpdate, db: Session = Depends(get_
         raise HTTPException(404, str(e))
 
 
+@router.get("/audit/{project_id}/export")
+def export_audit_entries(project_id: int, db: Session = Depends(get_db)):
+    """Export audit entries as Excel."""
+    import openpyxl, io
+    from fastapi.responses import StreamingResponse
+    from app.models import AuditEntry, CoAMaster
+
+    entries = db.query(AuditEntry).filter(AuditEntry.project_id == project_id).order_by(AuditEntry.entry_no).all()
+    coa = {c.code: c.particulars for c in db.query(CoAMaster).all()}
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Audit Entries"
+    headers = ["#", "Date", "Narration", "Dr Code", "Dr Particulars", "Cr Code", "Cr Particulars", "Amount", "Status"]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = openpyxl.styles.Font(bold=True)
+        cell.fill = openpyxl.styles.PatternFill("solid", fgColor="DAEEF3")
+
+    for e in entries:
+        ws.append([
+            e.entry_no or '', e.date.strftime("%d-%b-%Y") if e.date else '',
+            e.narration, e.dr_coa_code, coa.get(e.dr_coa_code, ''),
+            e.cr_coa_code, coa.get(e.cr_coa_code, ''), e.amount, e.status
+        ])
+
+    for col in ws.columns:
+        max_len = max(len(str(c.value or "")) for c in col)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 50)
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return StreamingResponse(buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=Audit_Entries_{project_id}.xlsx"})
+
+
 @router.delete("/audit/{entry_id}")
 def delete_audit(entry_id: int, db: Session = Depends(get_db)):
     """Delete an audit entry."""

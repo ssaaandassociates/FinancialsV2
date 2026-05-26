@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}SSAA Financials Tool{% endblock %}</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -18,9 +19,10 @@
       <div class="nav-section">Workflow</div>
       <a href="/project/{{ project.id }}" class="{% if active == 'project' %}active{% endif %}">① Dashboard</a>
       <a href="/project/{{ project.id }}/upload" class="{% if active == 'upload' %}active{% endif %}">② Upload & Map</a>
-      <a href="/project/{{ project.id }}/data" class="{% if active == 'data' %}active{% endif %} {% if project.status == 'setup' %}nav-disabled{% endif %}">③ Supplementary Data</a>
-      <a href="/project/{{ project.id }}/enrich" class="{% if active == 'enrich' %}active{% endif %} {% if project.status in ['setup'] %}nav-disabled{% endif %}">④ Notes & Disclosures</a>
-      <a href="/project/{{ project.id }}/preview" class="{% if active == 'preview' %}active{% endif %} {% if project.status in ['setup'] %}nav-disabled{% endif %}">⑤ Preview & Export</a>
+      <a href="/project/{{ project.id }}/audit" class="{% if active == 'audit' %}active{% endif %}">③ Audit Entries</a>
+      <a href="/project/{{ project.id }}/data" class="{% if active == 'data' %}active{% endif %} {% if project.status == 'setup' %}nav-disabled{% endif %}">④ Supplementary Data</a>
+      <a href="/project/{{ project.id }}/enrich" class="{% if active == 'enrich' %}active{% endif %} {% if project.status in ['setup'] %}nav-disabled{% endif %}">⑤ Notes & Disclosures</a>
+      <a href="/project/{{ project.id }}/preview" class="{% if active == 'preview' %}active{% endif %} {% if project.status in ['setup'] %}nav-disabled{% endif %}">⑥ Preview & Export</a>
 
       <div class="nav-section">Navigate</div>
       <a href="/client/{{ project.client_id }}">← Client Dashboard</a>

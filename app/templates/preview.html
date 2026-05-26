@@ -20,6 +20,7 @@
 {% if not bs or not pl %}
 <div class="alert alert-warning">No data to preview. Upload TB and map first.</div>
 {% else %}
+
 <!-- Export Bar -->
 <div class="card mb-6"><div class="card-body flex gap-4 items-center justify-between">
   <div><strong>Export</strong><span class="text-muted text-sm" style="margin-left:8px">{{ project.client_name }} — FY {{ project.financial_year }}</span></div>
@@ -30,45 +31,62 @@
   </div>
 </div></div>
 
-<!-- Tabs -->
+<!-- Tabs — Section 9 V9 -->
 <div class="tabs mb-6">
   <div class="tab active" onclick="showTab('bs',this)">Balance Sheet</div>
-  <div class="tab" onclick="showTab('pl',this)">Profit & Loss</div>
+  <div class="tab" onclick="showTab('pl',this)">Profit &amp; Loss</div>
   <div class="tab" onclick="showTab('notes',this)">Notes</div>
+  <div class="tab" onclick="showTab('cf',this)">Cash Flow</div>
+  <div class="tab" onclick="showTab('ratios',this)">Ratios</div>
+  <div class="tab" onclick="showTab('eps',this)">EPS</div>
 </div>
 
 <!-- Balance Sheet -->
 <div id="tab-bs" class="tab-content">
   <div class="card"><div class="card-header"><h3>Balance Sheet {{ proj_obj.bs_header_cy }}</h3>
-    {% if bs.is_balanced_cy %}<span class="badge badge-green">Balanced</span>{% else %}<span class="badge badge-red">Diff: {{ "{:,.0f}".format(bs.difference_cy) }}</span>{% endif %}</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      {% if bs.is_balanced_cy %}<span class="badge badge-green">Balanced</span>{% else %}<span class="badge badge-red">Diff: {{ "{:,.0f}".format(bs.difference_cy) }}</span>{% endif %}
+      <a href="/project/{{ project.id }}/upload" class="btn btn-sm btn-outline" title="Edit on Mapping page">✎ Edit Mapping</a>
+    </div>
+  </div>
   <table class="fs-table">
-    <tr class="fs-head"><td></td><td>Particulars</td><td>Note</td><td class="fs-num">{{ proj_obj.bs_header_cy }}</td><td class="fs-num">{{ proj_obj.bs_header_py }}</td></tr>
+    <tr class="fs-head"><td></td><td>Particulars</td><td>Note</td><td class="fs-num">{{ proj_obj.bs_header_cy }}</td><td class="fs-num">{{ proj_obj.bs_header_py }}</td><td style="width:40px"></td></tr>
     {% for sno, text, note_ref, cy, py, level, is_total in bs.line_items %}
     <tr class="{% if is_total and level == 1 %}fs-total{% elif is_total %}fs-subtotal{% elif level == 1 %}fs-section{% endif %}">
       <td style="width:30px">{{ sno }}</td><td>{{ text }}</td><td class="fs-note">{{ note_ref }}</td>
       <td class="fs-num">{% if cy is not none %}{{ "{:,.0f}".format(cy) }}{% endif %}</td>
-      <td class="fs-num">{% if py is not none %}{{ "{:,.0f}".format(py) }}{% endif %}</td></tr>
+      <td class="fs-num">{% if py is not none %}{{ "{:,.0f}".format(py) }}{% endif %}</td>
+      <td class="text-muted">{% if note_ref %}<a href="javascript:void(0)" onclick="openLineModal('bs','{{ note_ref }}','{{ text|e }}',{{ cy or 0 }},{{ py or 0 }})" class="text-sm" title="Drill into Note {{ note_ref }}">↳</a>{% endif %}</td>
+    </tr>
     {% endfor %}
   </table></div>
 </div>
 
 <!-- P&L -->
 <div id="tab-pl" class="tab-content" style="display:none;">
-  <div class="card"><div class="card-header"><h3>Statement of Profit and Loss {{ proj_obj.pl_header_cy }}</h3></div>
+  <div class="card"><div class="card-header">
+    <h3>Statement of Profit and Loss {{ proj_obj.pl_header_cy }}</h3>
+    <a href="/project/{{ project.id }}/upload" class="btn btn-sm btn-outline">✎ Edit Mapping</a>
+  </div>
   <table class="fs-table">
-    <tr class="fs-head"><td></td><td>Particulars</td><td>Note</td><td class="fs-num">{{ proj_obj.pl_header_cy }}</td><td class="fs-num">{{ proj_obj.pl_header_py }}</td></tr>
+    <tr class="fs-head"><td></td><td>Particulars</td><td>Note</td><td class="fs-num">{{ proj_obj.pl_header_cy }}</td><td class="fs-num">{{ proj_obj.pl_header_py }}</td><td style="width:40px"></td></tr>
     {% for sno, text, note_ref, cy, py, level, is_total in pl.line_items %}
     <tr class="{% if is_total %}fs-total{% endif %}">
       <td style="width:30px">{{ sno }}</td><td>{{ text }}</td><td class="fs-note">{{ note_ref }}</td>
       <td class="fs-num">{% if cy is not none %}{{ "{:,.0f}".format(cy) }}{% endif %}</td>
-      <td class="fs-num">{% if py is not none %}{{ "{:,.0f}".format(py) }}{% endif %}</td></tr>
+      <td class="fs-num">{% if py is not none %}{{ "{:,.0f}".format(py) }}{% endif %}</td>
+      <td class="text-muted">{% if note_ref %}<a href="javascript:void(0)" onclick="openLineModal('pl','{{ note_ref }}','{{ text|e }}',{{ cy or 0 }},{{ py or 0 }})" class="text-sm">↳</a>{% endif %}</td>
+    </tr>
     {% endfor %}
   </table></div>
 </div>
 
 <!-- Notes -->
 <div id="tab-notes" class="tab-content" style="display:none;">
-  <div class="card mb-4"><div class="card-header"><h3>Balance Sheet Notes</h3></div><div class="card-body">
+  <div class="card mb-4"><div class="card-header">
+    <h3>Balance Sheet Notes</h3>
+    <a href="/project/{{ project.id }}/enrich" class="btn btn-sm btn-outline">✎ Edit Disclosures</a>
+  </div><div class="card-body">
     {% for key, note in notes.bs_notes.items() %}
     <div class="mb-6">
       <h4 style="font-size:13px;color:var(--navy);padding:6px 10px;background:var(--navy-pale);border-radius:4px">Note {{ key }}</h4>
@@ -84,7 +102,7 @@
     </div>
     {% endfor %}
   </div></div>
-  <div class="card"><div class="card-header"><h3>P&L Notes</h3></div><div class="card-body">
+  <div class="card"><div class="card-header"><h3>P&amp;L Notes</h3></div><div class="card-body">
     {% for key, note in notes.pl_notes.items() %}
     <div class="mb-6">
       <h4 style="font-size:13px;color:var(--navy);padding:6px 10px;background:var(--gold-light);border-radius:4px">Note {{ key }}</h4>
@@ -101,22 +119,197 @@
     {% endfor %}
   </div></div>
 </div>
+
+<!-- Cash Flow (V9 new) -->
+<div id="tab-cf" class="tab-content" style="display:none;">
+  <div class="card"><div class="card-header"><h3>Cash Flow Statement {{ proj_obj.pl_header_cy }} (Indirect Method)</h3>
+    {% if cashflow and cashflow.reconciliation_diff is defined %}
+      {% if (cashflow.reconciliation_diff|abs) < 1 %}
+        <span class="badge badge-green">Reconciled</span>
+      {% else %}
+        <span class="badge badge-red">Diff: {{ "{:,.0f}".format(cashflow.reconciliation_diff) }}</span>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% if cashflow and cashflow.line_items %}
+  <table class="fs-table">
+    <tr class="fs-head"><td></td><td>Particulars</td><td class="fs-num">{{ proj_obj.pl_header_cy }}</td><td class="fs-num">{{ proj_obj.pl_header_py }}</td></tr>
+    {% for prefix, text, cy, py, is_total, level in cashflow.line_items %}
+    <tr class="{% if is_total and level == 1 %}fs-total{% elif is_total %}fs-subtotal{% endif %}">
+      <td style="width:30px">{{ prefix }}</td>
+      <td style="padding-left:{{ (level * 8) }}px">{{ text }}</td>
+      <td class="fs-num">{% if cy is not none %}{{ "{:,.0f}".format(cy) }}{% endif %}</td>
+      <td class="fs-num">{% if py is not none %}{{ "{:,.0f}".format(py) }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <div class="card-body"><p class="text-muted">Unable to generate cash flow. Ensure BS and P&amp;L are valid first.</p></div>
+  {% endif %}
+  </div>
+</div>
+
+<!-- Ratios (V9 new) -->
+<div id="tab-ratios" class="tab-content" style="display:none;">
+  <div class="card"><div class="card-header">
+    <h3>Schedule III Ratios</h3>
+    <div style="display:flex;gap:8px;align-items:center;">
+      {% if ratios and ratios.flagged_count > 0 %}
+      <span class="badge" style="background:var(--red-pale);color:var(--red);">{{ ratios.flagged_count }} flagged &gt;25%</span>
+      {% else %}
+      <span class="badge badge-green">No flags</span>
+      {% endif %}
+      <a href="/project/{{ project.id }}/data#ratio" class="btn btn-sm btn-outline">✎ Edit PY-1</a>
+    </div>
+  </div>
+  <div class="card-body" style="overflow-x:auto;">
+    {% if ratios and ratios.ratios %}
+    <table class="tbl" style="font-size:11px;">
+      <thead><tr>
+        <th style="width:24px">#</th><th>Ratio</th>
+        <th class="text-sm">Numerator / Denominator</th>
+        <th class="num">CY</th><th class="num">PY</th>
+        <th class="num">Variance %</th><th>Flag</th>
+      </tr></thead>
+      <tbody>
+      {% for r in ratios.ratios %}
+      <tr {% if r.flag %}style="background:var(--red-pale,#fde8e8);"{% endif %}>
+        <td>{{ r.no }}</td>
+        <td><strong>{{ r.name }}</strong></td>
+        <td class="text-muted" style="font-size:10px;">{{ r.numerator }} / {{ r.denominator }}</td>
+        <td class="num">{% if r.cy is not none %}{{ "{:.4f}".format(r.cy) }}{% else %}—{% endif %}</td>
+        <td class="num">{% if r.py is not none %}{{ "{:.4f}".format(r.py) }}{% else %}—{% endif %}</td>
+        <td class="num">{% if r.variance_pct is not none %}{{ "{:+.2%}".format(r.variance_pct) }}{% else %}—{% endif %}</td>
+        <td>{% if r.flag %}<span class="badge" style="background:var(--red-pale);color:var(--red);font-size:10px;">{{ r.flag }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No ratios available.</p>
+    {% endif %}
+  </div>
+  </div>
+</div>
+
+<!-- EPS (V9 new) -->
+<div id="tab-eps" class="tab-content" style="display:none;">
+  <div class="card"><div class="card-header"><h3>Earnings Per Share</h3></div>
+  <div class="card-body">
+    {% if eps %}
+    <table class="tbl" style="max-width:700px;">
+      <tr><td>Profit After Tax (CY)</td><td class="num">{{ "{:,.2f}".format(eps.pat_cy) }}</td><td class="num">PY: {{ "{:,.2f}".format(eps.pat_py) }}</td></tr>
+      <tr><td>Less: Preference Dividend</td><td class="num">{{ "{:,.2f}".format(eps.preference_dividend) }}</td><td></td></tr>
+      <tr class="fs-subtotal"><td><strong>Profit Attributable to Equity Shareholders</strong></td>
+        <td class="num"><strong>{{ "{:,.2f}".format(eps.profit_to_equity_cy) }}</strong></td>
+        <td class="num text-muted">PY: {{ "{:,.2f}".format(eps.profit_to_equity_py) }}</td></tr>
+      <tr><td>Weighted Avg Equity Shares (Basic)</td><td class="num">{{ "{:,.0f}".format(eps.weighted_avg_basic) }}</td><td></td></tr>
+      <tr><td>Weighted Avg Equity Shares (Diluted)</td><td class="num">{{ "{:,.0f}".format(eps.weighted_avg_diluted) }}</td><td></td></tr>
+      <tr><td>Face Value per Share</td><td class="num">₹ {{ eps.face_value }}</td><td></td></tr>
+      <tr class="fs-total" style="background:var(--gold-light);"><td><strong>Basic EPS</strong></td>
+        <td class="num"><strong>₹ {{ "{:,.2f}".format(eps.basic_eps_cy) }}</strong></td>
+        <td class="num text-muted">PY: ₹ {{ "{:,.2f}".format(eps.basic_eps_py) }}</td></tr>
+      <tr class="fs-total" style="background:var(--gold-light);"><td><strong>Diluted EPS</strong></td>
+        <td class="num"><strong>₹ {{ "{:,.2f}".format(eps.diluted_eps_cy) }}</strong></td>
+        <td class="num text-muted">PY: ₹ {{ "{:,.2f}".format(eps.diluted_eps_py) }}</td></tr>
+    </table>
+    {% else %}
+    <p class="text-muted">EPS unavailable. Ensure share capital data is entered.</p>
+    {% endif %}
+  </div>
+  </div>
+</div>
+
+<!-- Edit-Line Modal (Section 9 V9) -->
+<div class="modal-bg" id="lineModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header"><h3 id="lineModalTitle">Line Detail</h3>
+      <button class="btn btn-sm" onclick="closeLineModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="lineModalBody">
+        <p class="text-muted text-sm">Loading…</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLineModal()">Close</button>
+      <a href="#" id="lineModalGoto" class="btn btn-primary">Open Source Page →</a>
+    </div>
+  </div>
+</div>
+
 {% endif %}
 
 <div class="flex justify-between mt-4">
-  <a href="/project/{{ project.id }}/enrich" class="btn btn-outline">← Notes & Disclosures</a>
+  <a href="/project/{{ project.id }}/enrich" class="btn btn-outline">← Notes &amp; Disclosures</a>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function showTab(id,el){document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).style.display='block';el.classList.add('active');}
-async function runVal(){const box=document.getElementById('valBox');box.innerHTML='<p class="text-muted">Running...</p>';
-  const r=await fetch('/api/validate/{{ project.id }}');const v=await r.json();let h='';
-  if(v.errors.length>0){h+='<div class="alert alert-danger"><strong>Errors (must fix):</strong><br>';v.errors.forEach(e=>h+='• '+e+'<br>');h+='</div>';}
-  if(v.warnings.length>0){h+='<div class="alert alert-warning"><strong>Warnings:</strong><br>';v.warnings.forEach(w=>h+='• '+w+'<br>');h+='</div>';}
-  if(v.info.length>0){h+='<div class="alert alert-info"><strong>Status:</strong><br>';v.info.forEach(i=>h+='✓ '+i+'<br>');h+='</div>';}
-  if(v.is_ready)h+='<div class="alert alert-success"><strong>Ready for export!</strong></div>';
-  box.innerHTML=h;}
+const PID = {{ project.id }};
+
+function showTab(id, el){
+  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).style.display = 'block';
+  el.classList.add('active');
+}
+
+async function runVal(){
+  const box = document.getElementById('valBox');
+  box.innerHTML = '<p class="text-muted">Running...</p>';
+  const r = await fetch('/api/validate/' + PID);
+  const v = await r.json();
+  let h = '';
+  if(v.errors.length > 0){ h += '<div class="alert alert-danger"><strong>Errors (must fix):</strong><br>'; v.errors.forEach(e => h += '• ' + e + '<br>'); h += '</div>'; }
+  if(v.warnings.length > 0){ h += '<div class="alert alert-warning"><strong>Warnings:</strong><br>'; v.warnings.forEach(w => h += '• ' + w + '<br>'); h += '</div>'; }
+  if(v.info.length > 0){ h += '<div class="alert alert-info"><strong>Status:</strong><br>'; v.info.forEach(i => h += '✓ ' + i + '<br>'); h += '</div>'; }
+  if(v.is_ready) h += '<div class="alert alert-success"><strong>Ready for export!</strong></div>';
+  box.innerHTML = h;
+}
+
+// Section 9 V9 — Edit-line modal: shows TB ledgers behind a BS/PL line + edit links
+async function openLineModal(fsType, noteRef, lineText, cy, py){
+  const m = document.getElementById('lineModal');
+  m.classList.add('show');
+  document.getElementById('lineModalTitle').textContent = lineText + ' (Note ' + noteRef + ')';
+  const body = document.getElementById('lineModalBody');
+  body.innerHTML = '<p class="text-muted text-sm">Loading TB ledgers…</p>';
+  document.getElementById('lineModalGoto').href = '/project/' + PID + '/upload';
+
+  try {
+    const r = await fetch('/api/preview/' + PID + '/line-detail?note_ref=' + encodeURIComponent(noteRef));
+    if(!r.ok){
+      body.innerHTML = '<p class="text-muted">No detail available for this line.</p>';
+      return;
+    }
+    const d = await r.json();
+    let h = '<table class="tbl" style="font-size:12px;width:100%;">';
+    h += '<thead><tr><th>Ledger</th><th>CoA Code</th><th class="num">CY Net</th><th class="num">PY Net</th></tr></thead><tbody>';
+    if(d.ledgers && d.ledgers.length > 0){
+      d.ledgers.forEach(l => {
+        h += '<tr><td>' + l.ledger_name + '</td>'
+          + '<td class="code">' + (l.coa_code || '—') + '</td>'
+          + '<td class="num">' + Math.round(l.cy_net||0).toLocaleString() + '</td>'
+          + '<td class="num">' + Math.round(l.py_net||0).toLocaleString() + '</td></tr>';
+      });
+      h += '<tr class="fs-subtotal"><td colspan="2"><strong>Total</strong></td>'
+        + '<td class="num"><strong>' + Math.round(d.total_cy||0).toLocaleString() + '</strong></td>'
+        + '<td class="num"><strong>' + Math.round(d.total_py||0).toLocaleString() + '</strong></td></tr>';
+    } else {
+      h += '<tr><td colspan="4" class="text-muted">No TB ledgers mapped to this note.</td></tr>';
+    }
+    h += '</tbody></table>';
+    h += '<p class="text-sm text-muted mt-4">To change these amounts, edit ledger mappings on the Mapping page or add an audit entry.</p>';
+    body.innerHTML = h;
+  } catch(e){
+    body.innerHTML = '<p class="text-muted">Error loading detail: ' + e.message + '</p>';
+  }
+}
+
+function closeLineModal(){
+  document.getElementById('lineModal').classList.remove('show');
+}
 </script>
 {% endblock %}

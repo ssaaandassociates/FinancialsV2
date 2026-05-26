@@ -16,7 +16,7 @@ def get_db():
 
 
 def init_db():
-    from app.models.client import Client, Director, KMP
+    from app.models.client import Client, Director, ClientShareholder, CustomCoACode, ClientPolicy
     from app.models.project import Project
     from app.models.coa import CoAMaster
     from app.models.trial_balance import TrialBalance, TBMapping

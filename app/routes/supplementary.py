@@ -207,10 +207,151 @@ def add_rp_txn(payload: RPTxnInput, db: Session = Depends(get_db)):
         raise HTTPException(400, str(e))
 
 
+@router.get("/rp-transactions/party/{party_id}")
+def list_party_transactions(party_id: int, db: Session = Depends(get_db)):
+    """List all transactions for one related party (Section 7 V9)."""
+    return related_party_engine.list_transactions_for_party(db, party_id)
+
+
+class RPTxnUpdate(BaseModel):
+    transaction_type: str | None = None
+    cy_amount: float | None = None
+    py_amount: float | None = None
+
+
+@router.put("/rp-transactions/{txn_id}")
+def update_rp_txn(txn_id: int, payload: RPTxnUpdate, db: Session = Depends(get_db)):
+    """Update a single transaction (Section 7 V9)."""
+    txn = related_party_engine.update_rp_transaction(
+        db, txn_id,
+        transaction_type=payload.transaction_type,
+        cy_amount=payload.cy_amount,
+        py_amount=payload.py_amount,
+    )
+    if not txn:
+        raise HTTPException(404, "Transaction not found")
+    return {"id": txn.id, "type": txn.transaction_type,
+            "cy": txn.cy_amount, "py": txn.py_amount}
+
+
+@router.delete("/rp-transactions/{txn_id}")
+def delete_rp_txn(txn_id: int, db: Session = Depends(get_db)):
+    """Delete a single transaction (Section 7 V9)."""
+    ok = related_party_engine.delete_rp_transaction(db, txn_id)
+    if not ok:
+        raise HTTPException(404, "Transaction not found")
+    return {"status": "deleted"}
+
+
+@router.get("/rp/kmp-candidates/{project_id}")
+def kmp_candidates(project_id: int, db: Session = Depends(get_db)):
+    """
+    Section 7 V9: Return candidate related parties from client master
+    (all directors + non-director shareholders). For autocomplete dropdown.
+    """
+    from app.models import Project
+    proj = db.query(Project).filter(Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(404, "Project not found")
+    return related_party_engine.get_kmp_candidates_for_client(db, proj.client_id)
+
+
 @router.get("/related-parties/{project_id}/disclosure")
 def rp_disclosure(project_id: int, db: Session = Depends(get_db)):
     """Generate full RP disclosure with transaction matrix."""
     return related_party_engine.generate_rp_disclosure(db, project_id)
+
+
+@router.delete("/related-parties/{party_id}")
+def delete_rp(party_id: int, db: Session = Depends(get_db)):
+    """Delete a related party."""
+    from app.models.supplementary import RelatedParty, RPTransaction
+    db.query(RPTransaction).filter(RPTransaction.party_id == party_id).delete()
+    db.query(RelatedParty).filter(RelatedParty.id == party_id).delete()
+    db.commit()
+    return {"status": "deleted"}
+
+
+@router.post("/rp/auto-kmp/{project_id}")
+def auto_add_kmp_as_rp(project_id: int, db: Session = Depends(get_db)):
+    """D4: Auto-add directors with is_kmp=True as Related Parties."""
+    from app.models import Project
+    from app.models.client import Director
+    from app.models.supplementary import RelatedParty
+
+    proj = db.query(Project).filter(Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(404, "Project not found")
+
+    directors = db.query(Director).filter(
+        Director.client_id == proj.client_id,
+        Director.is_active == True,
+        Director.is_kmp == True,
+    ).all()
+
+    existing = {rp.name.strip().lower() for rp in
+                db.query(RelatedParty).filter(RelatedParty.project_id == project_id).all()}
+
+    added = 0
+    for d in directors:
+        if d.name.strip().lower() not in existing:
+            rp = RelatedParty(
+                project_id=project_id,
+                name=d.name,
+                category="KMP",
+                relationship=d.designation or "Director",
+                pan_cin=d.pan or "",
+            )
+            db.add(rp)
+            added += 1
+    db.commit()
+    return {"added": added, "total_kmp": len(directors)}
+
+
+# ============= D6: AGEING TEMPLATES =============
+
+@router.get("/ageing-template/{ageing_type}")
+def download_ageing_template(ageing_type: str):
+    """D6: Download blank ageing template (TR or TP)."""
+    import openpyxl
+    from fastapi.responses import StreamingResponse
+    import io
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    if ageing_type.upper() == "TR":
+        ws.title = "TR Ageing"
+        headers = ["Party Name", "Disputed (Y/N)", "Doubtful (Y/N)",
+                    "<6 Months", "6M-1Y", "1-2Y", "2-3Y", ">3Y"]
+        ws.append(headers)
+        # Sample row
+        ws.append(["ABC Traders", "N", "N", 50000, 20000, 10000, 5000, 2000])
+    else:
+        ws.title = "TP Ageing"
+        headers = ["Party Name", "MSME (Y/N)", "Disputed (Y/N)",
+                    "<1 Year", "1-2Y", "2-3Y", ">3Y"]
+        ws.append(headers)
+        ws.append(["XYZ Suppliers", "N", "N", 80000, 15000, 5000, 1000])
+
+    # Format header
+    for cell in ws[1]:
+        cell.font = openpyxl.styles.Font(bold=True)
+        cell.fill = openpyxl.styles.PatternFill("solid", fgColor="DAEEF3")
+
+    # Auto column widths
+    for col in ws.columns:
+        max_len = max(len(str(c.value or "")) for c in col)
+        ws.column_dimensions[col[0].column_letter].width = max(max_len + 2, 12)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={ageing_type.upper()}_Ageing_Template.xlsx"},
+    )
 
 
 # ============= ACCOUNTING POLICIES =============

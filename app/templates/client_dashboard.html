@@ -1,203 +1,434 @@
 {% extends "base_full.html" %}
 {% block title %}{{ client.name }} — SSAA Financials{% endblock %}
-{% block page_title %}{{ client.name }}{% endblock %}
+{% block page_title %}
+{{ client.name }}
+{% set is_opc = (client.cin and 'OPC' in client.cin.upper()) %}
+{% if is_opc %}<span class="badge-pill blue">OPC</span>{% else %}<span class="badge-pill grey">Pvt Ltd</span>{% endif %}
+{% endblock %}
 {% block breadcrumb %}<a href="/">Home</a><span>›</span>{{ client.name }}{% endblock %}
 
 {% block actions %}
-<button class="btn btn-gold" onclick="document.getElementById('newProjectModal').classList.add('show')">+ New Project</button>
-<button class="btn btn-danger btn-sm" onclick="deleteClient()">Delete Client</button>
+<a href="/api/templates/master-blank" class="btn btn-outline btn-sm" download title="Download a blank master-data Excel template" style="margin-right:6px;"><i class="ti ti-file-download"></i> Blank template</a>
+<a href="/api/templates/master-current/{{ client.id }}" class="btn btn-outline btn-sm" download title="Export this client's current data as Excel" style="margin-right:6px;"><i class="ti ti-file-export"></i> Export current</a>
+<a href="/api/templates/ppe" class="btn btn-outline btn-sm" download title="Download a pre-filled PPE schedule template" style="margin-right:6px;"><i class="ti ti-table"></i> PPE template</a>
+<button class="btn btn-gold" onclick="document.getElementById('newProjectModal').classList.add('show')"><i class="ti ti-plus"></i> New project</button>
 {% endblock %}
 
 {% block content %}
-<div class="tabs mb-6">
-  <div class="tab active" onclick="showTab('master',this)">Company Master</div>
-  <div class="tab" onclick="showTab('directors',this)">Directors & KMP</div>
-  <div class="tab" onclick="showTab('shareholders',this)">Shareholders</div>
-  <div class="tab" onclick="showTab('projects',this)">Projects ({{ projects|length }})</div>
-</div>
+<div class="split-layout">
+  <!-- ======== LEFT: Master Data ======== -->
+  <div class="master-panel">
 
-<!-- TAB: Company Master -->
-<div id="tab-master" class="tab-content">
-  <div class="card">
-    <div class="card-header"><h3>Company Information</h3><span class="save-ok" id="masterSaved">Saved ✓</span></div>
-    <div class="card-body">
-      <div class="grid grid-2">
-        <div class="form-group"><label>Company Name</label><input type="text" id="cl_name" class="form-control" value="{{ client.name }}" onchange="saveClient()"></div>
-        <div class="form-group"><label>CIN</label><input type="text" id="cl_cin" class="form-control" value="{{ client.cin or '' }}" onchange="saveClient()"></div>
+    <!-- Company Info section with Edit button INSIDE -->
+    <div id="masterView">
+      <div class="master-section">
+        <div class="flex justify-between items-center mb-2">
+          <div class="master-label" style="margin-bottom:0;">Company information</div>
+          <button class="btn btn-sm btn-outline" id="editMasterBtn" onclick="toggleMasterEdit()" style="padding:2px 8px;font-size:11px;"><i class="ti ti-edit"></i> Edit</button>
+        </div>
+        <table class="info-tbl">
+          <tr><td class="info-key">CIN</td><td>{{ client.cin or '—' }}</td></tr>
+          <tr><td class="info-key">PAN</td><td>{{ client.pan or '—' }}</td></tr>
+          <tr><td class="info-key">GSTIN</td><td>{{ client.gstin or '—' }}</td></tr>
+          <tr><td class="info-key">Activity</td><td>{{ client.principal_activity or '—' }}</td></tr>
+          <tr><td class="info-key">Address</td><td>{{ client.registered_office or '—' }}</td></tr>
+          <tr><td class="info-key">Face Value</td><td>Rs. {{ client.face_value or 10 }}</td></tr>
+        </table>
       </div>
-      <div class="grid grid-3">
-        <div class="form-group"><label>PAN</label><input type="text" id="cl_pan" class="form-control" value="{{ client.pan or '' }}" onchange="saveClient()"></div>
-        <div class="form-group"><label>GSTIN</label><input type="text" id="cl_gstin" class="form-control" value="{{ client.gstin or '' }}" onchange="saveClient()"></div>
-        <div class="form-group"><label>Face Value (Rs.)</label><input type="number" id="cl_fv" class="form-control" value="{{ client.face_value or 10 }}" onchange="saveClient()"></div>
+
+      <div class="info-card">
+        <div class="master-label">Statutory auditor</div>
+        <div style="font-weight:500;">{{ client.auditor_name or '—' }}</div>
+        <div class="text-muted text-sm">
+          {% if client.auditor_frn %}FRN: {{ client.auditor_frn }}{% endif %}
+          {% if client.auditor_membership_no %} · M.No: {{ client.auditor_membership_no }}{% endif %}
+          {% if not client.auditor_frn and not client.auditor_membership_no %}<em>(Add FRN & Membership No.)</em>{% endif %}
+        </div>
       </div>
-      <div class="form-group"><label>Registered Address</label><textarea id="cl_addr" class="form-control" rows="2" onchange="saveClient()">{{ client.registered_office or '' }}</textarea></div>
-      <div class="form-group"><label>Principal Activity / Main Objective</label><input type="text" id="cl_activity" class="form-control" value="{{ client.principal_activity or '' }}" onchange="saveClient()"></div>
-      <div class="grid grid-2">
-        <div class="form-group"><label>Authorised Capital</label><input type="number" id="cl_auth" class="form-control" value="{{ client.authorized_capital or 0 }}" onchange="saveClient()"></div>
-        <div class="form-group"><label>Paid-up Capital</label><input type="number" id="cl_paid" class="form-control" value="{{ client.paid_up_capital or 0 }}" onchange="saveClient()"></div>
-      </div>
-      <div class="grid grid-2">
-        <div class="form-group"><label>Auditor Name</label><input type="text" id="cl_aud" class="form-control" value="{{ client.auditor_name or '' }}" onchange="saveClient()"></div>
-        <div class="form-group"><label>Auditor FRN</label><input type="text" id="cl_frn" class="form-control" value="{{ client.auditor_frn or '' }}" onchange="saveClient()"></div>
+
+      <div class="info-card">
+        <div class="master-label">Share capital</div>
+        <div class="cap-grid">
+          <div><div class="text-muted text-sm">Authorised</div><div class="cap-val">{{ "{:,.0f}".format((client.authorised_shares or 0) * (client.face_value or 10)) }}</div></div>
+          <div><div class="text-muted text-sm">Subscribed</div><div class="cap-val">{{ "{:,.0f}".format((client.subscribed_shares or 0) * (client.face_value or 10)) }}</div></div>
+          <div><div class="text-muted text-sm">Paid-up</div><div class="cap-val">{{ "{:,.0f}".format((client.paidup_shares or 0) * (client.face_value or 10)) }}</div></div>
+        </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- TAB: Directors & KMP -->
-<div id="tab-directors" class="tab-content" style="display:none;">
-  <div class="grid grid-2">
-    <div class="card">
-      <div class="card-header"><h3>Directors</h3><button class="btn btn-gold btn-sm" onclick="document.getElementById('dirModal').classList.add('show')">+ Add</button></div>
-      {% if directors %}
-      <table class="tbl"><thead><tr><th>Name</th><th>DIN</th><th>Designation</th><th></th></tr></thead><tbody>
-        {% for d in directors %}<tr><td><strong>{{ d.name }}</strong></td><td class="code">{{ d.din }}</td><td>{{ d.designation }}</td>
-          <td><button class="btn btn-sm btn-danger" onclick="deleteDir({{ d.id }})">×</button></td></tr>{% endfor %}
-      </tbody></table>
-      {% else %}<div class="card-body"><p class="text-muted text-sm">No directors added.</p></div>{% endif %}
+    <!-- Edit mode -->
+    <div id="masterEdit" style="display:none;">
+      <div class="master-section">
+        <div class="flex justify-between items-center mb-2">
+          <div class="master-label" style="margin-bottom:0;">Edit company info</div>
+          <div class="flex gap-2"><button class="btn btn-sm btn-primary" onclick="saveMaster()" style="padding:2px 10px;font-size:11px;">Save</button><button class="btn btn-sm btn-outline" onclick="toggleMasterEdit()" style="padding:2px 8px;font-size:11px;">Cancel</button></div>
+        </div>
+        {% for id,lbl,val,type in [('cl_name','Name',client.name,'text'),('cl_cin','CIN',client.cin or '','text'),('cl_pan','PAN',client.pan or '','text'),('cl_gstin','GSTIN',client.gstin or '','text')] %}
+        <div class="form-group compact"><label>{{ lbl }}</label><input type="{{ type }}" id="{{ id }}" class="form-control" value="{{ val }}"></div>
+        {% endfor %}
+        <div class="form-group compact"><label>Activity</label><input type="text" id="cl_activity" class="form-control" value="{{ client.principal_activity or '' }}"></div>
+        <div class="form-group compact"><label>Address</label><textarea id="cl_addr" class="form-control" rows="2">{{ client.registered_office or '' }}</textarea></div>
+        <div class="form-group compact"><label>Face Value</label><input type="number" id="cl_fv" class="form-control" value="{{ client.face_value or 10 }}"></div>
+        <div class="master-label" style="margin-top:12px;">Auditor</div>
+        <div class="form-group compact"><label>Name</label><input type="text" id="cl_aud" class="form-control" value="{{ client.auditor_name or '' }}"></div>
+        <div class="form-group compact"><label>FRN</label><input type="text" id="cl_frn" class="form-control" value="{{ client.auditor_frn or '' }}"></div>
+        <div class="form-group compact"><label>Membership No.</label><input type="text" id="cl_mno" class="form-control" value="{{ client.auditor_membership_no or '' }}"></div>
+        <div class="master-label" style="margin-top:12px;">Share capital (no. of shares)</div>
+        <div class="form-group compact"><label>Authorised</label><input type="number" id="cap_auth" class="form-control" value="{{ client.authorised_shares or 0 }}"></div>
+        <div class="form-group compact"><label>Subscribed</label><input type="number" id="cap_sub" class="form-control" value="{{ client.subscribed_shares or 0 }}"></div>
+        <div class="form-group compact"><label>Paid-up</label><input type="number" id="cap_paid" class="form-control" value="{{ client.paidup_shares or 0 }}"></div>
+        <span class="save-ok" id="masterSaved">Saved ✓</span>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-header"><h3>Key Managerial Personnel</h3><button class="btn btn-gold btn-sm" onclick="document.getElementById('kmpModal').classList.add('show')">+ Add</button></div>
-      {% if kmp_list %}
-      <table class="tbl"><thead><tr><th>Name</th><th>Designation</th><th>PAN</th></tr></thead><tbody>
-        {% for k in kmp_list %}<tr><td><strong>{{ k.name }}</strong></td><td>{{ k.designation }}</td><td class="code">{{ k.pan or '' }}</td></tr>{% endfor %}
-      </tbody></table>
-      {% else %}<div class="card-body"><p class="text-muted text-sm">No KMP added.</p></div>{% endif %}
+
+    <!-- Clickable Blocks -->
+    <div class="block-card" onclick="openBlock('directors')">
+      <div class="block-top"><div class="block-title"><i class="ti ti-users" aria-hidden="true" style="color:var(--blue);"></i> Directors & KMP</div><span class="block-count info">{{ directors|length }}</span></div>
+      <div class="block-sub">{{ kmp_list|length }} KMP · {{ directors|selectattr('signs_financials')|list|length }} sign financials</div>
+    </div>
+    <div class="block-card" onclick="openBlock('shareholders')">
+      <div class="block-top"><div class="block-title"><i class="ti ti-certificate" aria-hidden="true" style="color:var(--green);"></i> Shareholders</div><span class="block-count green">{{ shareholders|length }}</span></div>
+      <div class="block-sub">{{ "{:,}".format(shareholders|sum(attribute='no_of_shares_cy')) }} shares · {{ shareholders|selectattr('is_promoter')|list|length }} promoters</div>
+    </div>
+    <div class="block-card" onclick="openBlock('policies')">
+      <div class="block-top"><div class="block-title"><i class="ti ti-file-text" aria-hidden="true" style="color:var(--gold);"></i> Accounting policies</div><span class="block-count gold">{{ policies|length }}</span></div>
+      <div class="block-sub">Client-level · inherited by projects</div>
+    </div>
+    <div class="block-card" onclick="openBlock('customcoa')">
+      <div class="block-top"><div class="block-title"><i class="ti ti-list-tree" aria-hidden="true" style="color:#534AB7;"></i> Custom CoA codes</div><span class="block-count purple">{{ custom_codes|length }}</span></div>
+      <div class="block-sub">Available in all projects</div>
     </div>
   </div>
-</div>
 
-<!-- TAB: Shareholders -->
-<div id="tab-shareholders" class="tab-content" style="display:none;">
-  <div class="card">
-    <div class="card-header"><h3>Shareholders</h3><button class="btn btn-gold btn-sm" onclick="document.getElementById('shModal').classList.add('show')">+ Add</button></div>
-    <div id="shList" class="card-body"><p class="text-muted text-sm">Loading...</p></div>
-  </div>
-</div>
+  <!-- ======== RIGHT: Content ======== -->
+  <div class="content-panel">
 
-<!-- TAB: Projects -->
-<div id="tab-projects" class="tab-content" style="display:none;">
-  <div class="card">
-    <div class="card-header"><h3>Financial Year Projects</h3>
-      <button class="btn btn-gold btn-sm" onclick="document.getElementById('newProjectModal').classList.add('show')">+ New Project</button></div>
-    {% if projects %}
-    <table class="tbl"><thead><tr><th>FY</th><th>Type</th><th>Rounding</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+    <!-- DEFAULT: Projects -->
+    <div id="panel-projects">
+      <div class="master-label" style="margin-bottom:12px;">Financial year projects</div>
+      {% set status_labels = {'setup':'Draft','tb_uploaded':'TB Uploaded','mapped':'Mapped','data_entered':'Data Entered','enriched':'Enriched','previewed':'Previewed','exported':'Exported','generated':'Generated'} %}
+      {% set status_colors = {'setup':'grey','tb_uploaded':'blue','mapped':'gold','data_entered':'gold','enriched':'gold','previewed':'gold','exported':'green','generated':'green'} %}
       {% for p in projects %}
-      <tr>
-        <td><strong>{{ p.financial_year }}</strong></td>
-        <td><span class="badge badge-blue">{{ p.company_type }}</span></td>
-        <td>{{ p.rounding }}</td>
-        <td><span class="badge {% if p.status in ['generated','exported'] %}badge-green{% elif p.status == 'mapped' %}badge-gold{% else %}badge-grey{% endif %}">{{ p.status }}</span></td>
-        <td>
-          <a href="/project/{{ p.id }}" class="btn btn-primary btn-sm">Open</a>
-          <button class="btn btn-danger btn-sm" onclick="deleteProject({{ p.id }},'{{ p.financial_year }}')">Delete</button>
-        </td>
-      </tr>{% endfor %}
-    </tbody></table>
-    {% else %}<div class="card-body"><p class="text-muted">No projects yet. Create one to start preparing financial statements.</p></div>{% endif %}
+      <div class="project-card">
+        <div class="flex justify-between items-start">
+          <div>
+            <div style="font-size:16px;font-weight:600;">FY {{ p.financial_year }}{% if p.version > 1 %} <span class="badge badge-gold">V{{ p.version }}</span>{% endif %}</div>
+            <div class="text-sm text-muted" style="margin-top:2px;">
+              {% if p.bs_date_cy %}As at {{ p.bs_date_cy[8:10] }}/{{ p.bs_date_cy[5:7] }}/{{ p.bs_date_cy[:4] }} · {% endif %}
+              {{ p.company_type|capitalize }} · {{ p.rounding }}
+            </div>
+          </div>
+          <span class="status-pill {{ status_colors.get(p.status, 'grey') }}">{{ status_labels.get(p.status, p.status) }}</span>
+        </div>
+        <div class="project-stats">
+          <span><i class="ti ti-file-spreadsheet"></i> {{ p.tb_total }} ledgers</span>
+          <span><i class="ti ti-check"></i> {{ p.tb_mapped }} mapped</span>
+          {% if p.audit_count > 0 %}<span><i class="ti ti-edit"></i> {{ p.audit_count }} audit entries</span>{% endif %}
+        </div>
+        <div class="flex gap-2 mt-4">
+          <a href="/project/{{ p.id }}" class="btn btn-sm btn-primary">Open project</a>
+          <a href="/api/export/{{ p.id }}/excel" class="btn btn-sm btn-outline" download><i class="ti ti-download"></i> Export</a>
+          <button class="btn btn-sm btn-outline" onclick="duplicateProject({{ p.id }},'{{ p.financial_year }}')"><i class="ti ti-copy"></i> Duplicate</button>
+          <button class="btn btn-sm btn-outline" style="margin-left:auto;color:var(--red);" onclick="deleteProject({{ p.id }},'{{ p.financial_year }}')"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Empty state -->
+      <div class="empty-hint" onclick="document.getElementById('newProjectModal').classList.add('show')">
+        <i class="ti ti-plus"></i> {% if projects %}Create another financial year project{% else %}Create your first project to start{% endif %}
+      </div>
+
+      <!-- Workflow steps -->
+      {% if projects %}
+      <div style="margin-top:24px;">
+        <div class="master-label">Project workflow {% if projects|length == 1 %}(click any step to jump in){% else %}(click step to jump into latest project){% endif %}</div>
+        {% set latest = projects[0] %}
+        <div class="workflow-bar">
+          <a href="/project/{{ latest.id }}" class="wf-step">① Dashboard</a>
+          <a href="/project/{{ latest.id }}/upload" class="wf-step">② Upload & Map</a>
+          <a href="/project/{{ latest.id }}/audit" class="wf-step">③ Audit Entries</a>
+          <a href="/project/{{ latest.id }}/data" class="wf-step">④ Supplementary</a>
+          <a href="/project/{{ latest.id }}/enrich" class="wf-step">⑤ Enrich Notes</a>
+          <a href="/project/{{ latest.id }}/preview" class="wf-step">⑥ Preview & Export</a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- DIRECTORS -->
+    <div id="panel-directors" style="display:none;">
+      <div class="flex justify-between items-center mb-4">
+        <div class="master-label">Directors & KMP</div>
+        <div class="flex gap-4">
+          <button class="btn btn-outline btn-sm" onclick="openBlock('projects')"><i class="ti ti-arrow-left"></i> Back</button>
+          <button class="btn btn-gold btn-sm" onclick="openDirModal()"><i class="ti ti-plus"></i> Add Director</button>
+        </div>
+      </div>
+      {% if directors %}
+      <table class="tbl">
+        <thead><tr><th>Name</th><th>DIN</th><th>Designation</th><th>KMP</th><th>Signs</th><th>Also Shareholder?</th><th></th></tr></thead>
+        <tbody>{% for d in directors %}<tr>
+          <td><strong>{{ d.name }}</strong></td><td class="code">{{ d.din or '—' }}</td><td>{{ d.designation }}</td>
+          <td>{% if d.is_kmp %}<span class="badge badge-green">Yes</span>{% else %}<span class="badge badge-grey">No</span>{% endif %}</td>
+          <td>{% if d.signs_financials %}<span class="badge badge-blue">Yes</span>{% else %}<span class="badge badge-grey">No</span>{% endif %}</td>
+          <td>{% set sh = shareholders|selectattr('din','equalto',d.din)|list if d.din else [] %}{% if sh %}<span class="badge badge-gold">{{ "{:,}".format(sh[0].no_of_shares_cy) }} shares</span>{% else %}—{% endif %}</td>
+          <td><div class="flex gap-2"><button class="btn btn-sm btn-outline" onclick="editDir({{ d.id }},'{{ d.name|e }}','{{ d.din or '' }}','{{ d.designation }}','{{ d.pan or '' }}',{{ 'true' if d.is_kmp else 'false' }},{{ 'true' if d.signs_financials else 'false' }})"><i class="ti ti-edit"></i></button><button class="btn btn-sm btn-outline" style="color:var(--red);" onclick="deleteDir({{ d.id }})"><i class="ti ti-trash"></i></button></div></td>
+        </tr>{% endfor %}</tbody>
+      </table>
+      {% else %}<p class="text-muted text-sm">No directors added.</p>{% endif %}
+      {% if kmp_list %}
+      <div class="master-label" style="margin-top:16px;">KMP (auto from directors with KMP = Yes)</div>
+      <table class="tbl"><thead><tr><th>Name</th><th>Designation</th><th>DIN</th></tr></thead><tbody>
+        {% for k in kmp_list %}<tr><td>{{ k.name }}</td><td>{{ k.designation }}</td><td class="code">{{ k.din }}</td></tr>{% endfor %}
+      </tbody></table>
+      {% endif %}
+    </div>
+
+    <!-- SHAREHOLDERS -->
+    <div id="panel-shareholders" style="display:none;">
+      <div class="flex justify-between items-center mb-4">
+        <div class="master-label">Shareholders</div>
+        <div class="flex gap-4">
+          <button class="btn btn-outline btn-sm" onclick="openBlock('projects')"><i class="ti ti-arrow-left"></i> Back</button>
+          <button class="btn btn-gold btn-sm" onclick="openSHModal()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+      </div>
+      {% if shareholders %}
+      <table class="tbl">
+        <thead><tr><th>Name</th><th class="num">CY</th><th class="num">PY</th><th class="num">Capital</th><th class="num">%</th><th>Promoter</th><th>Director</th><th></th></tr></thead>
+        <tbody>{% for s in shareholders %}<tr>
+          <td><strong>{{ s.name }}</strong></td>
+          <td class="num">{{ "{:,}".format(s.no_of_shares_cy) }}</td>
+          <td class="num">{{ "{:,}".format(s.no_of_shares_py) }}</td>
+          <td class="num">{{ "{:,.0f}".format(s.share_capital_cy) }}</td>
+          <td class="num">{{ s.pct_holding_cy }}%</td>
+          <td>{% if s.is_promoter %}<span class="badge badge-gold">Yes</span>{% else %}—{% endif %}</td>
+          <td>{% if s.is_director %}<span class="badge badge-green">Yes</span> <span class="code">{{ s.din }}</span>{% else %}—{% endif %}</td>
+          <td><div class="flex gap-2"><button class="btn btn-sm btn-outline" onclick="editSH({{ s.id }},'{{ s.name|e }}',{{ s.no_of_shares_cy }},{{ s.no_of_shares_py }},{{ s.face_value }},{{ 'true' if s.is_promoter else 'false' }},{{ 'true' if s.is_director else 'false' }},'{{ s.din or '' }}')"><i class="ti ti-edit"></i></button><button class="btn btn-sm btn-outline" style="color:var(--red);" onclick="deleteSH({{ s.id }})"><i class="ti ti-trash"></i></button></div></td>
+        </tr>{% endfor %}
+        <tr class="total-row"><td>Total</td><td class="num">{{ "{:,}".format(shareholders|sum(attribute='no_of_shares_cy')) }}</td><td class="num">{{ "{:,}".format(shareholders|sum(attribute='no_of_shares_py')) }}</td><td class="num">{{ "{:,.0f}".format(shareholders|sum(attribute='share_capital_cy')) }}</td><td class="num">100%</td><td></td><td></td><td></td></tr>
+        </tbody>
+      </table>
+      {% else %}<p class="text-muted text-sm">No shareholders added.</p>{% endif %}
+    </div>
+
+    <!-- POLICIES -->
+    <div id="panel-policies" style="display:none;">
+      <div class="flex justify-between items-center mb-4">
+        <div class="master-label">Accounting policies</div>
+        <div class="flex gap-4">
+          <button class="btn btn-outline btn-sm" onclick="openBlock('projects')"><i class="ti ti-arrow-left"></i> Back</button>
+          {% if not policies %}<button class="btn btn-outline btn-sm" onclick="seedDefaultPolicies()"><i class="ti ti-download"></i> Load 15 standard policies</button>{% endif %}
+          <button class="btn btn-gold btn-sm" onclick="openPolicyModal()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+      </div>
+      {% if policies %}
+      {% for p in policies %}
+      <div class="policy-card">
+        <div class="flex justify-between items-start">
+          <div><strong>{{ p.policy_number }}. {{ p.title }}</strong></div>
+          <div class="flex gap-2">
+            <button class="btn btn-sm btn-outline" onclick="editPolicyInline({{ p.id }})"><i class="ti ti-edit"></i></button>
+            <button class="btn btn-sm btn-outline" style="color:var(--red);" onclick="delPolicy({{ p.id }})"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+        <div class="text-sm" style="margin-top:4px;white-space:pre-wrap;color:var(--text-light);" id="pol_body_{{ p.id }}">{{ p.body }}</div>
+      </div>
+      {% endfor %}
+      {% else %}<div class="empty-hint" onclick="seedDefaultPolicies()"><i class="ti ti-download"></i> No policies yet — click here to load 15 standard policies, then customize</div>{% endif %}
+    </div>
+
+    <!-- CUSTOM COA -->
+    <div id="panel-customcoa" style="display:none;">
+      <div class="flex justify-between items-center mb-4">
+        <div class="master-label">Custom CoA codes</div>
+        <div class="flex gap-4">
+          <button class="btn btn-outline btn-sm" onclick="openBlock('projects')"><i class="ti ti-arrow-left"></i> Back</button>
+          <button class="btn btn-gold btn-sm" onclick="document.getElementById('coaModal').classList.add('show')"><i class="ti ti-plus"></i> Add Code</button>
+        </div>
+      </div>
+      <div class="alert alert-info mb-4" style="font-size:12px;">Custom sub-codes appear alongside the standard 248 codes in mapping dropdowns. Format: BS-AS-01-01-15, PL-04-07-30, etc.</div>
+      {% if custom_codes %}
+      <table class="tbl">
+        <thead><tr><th>Code</th><th>Particulars</th><th>Parent</th><th>Type</th><th></th></tr></thead>
+        <tbody>{% for cc in custom_codes %}<tr>
+          <td class="code"><strong>{{ cc.code }}</strong></td><td>{{ cc.particulars }}</td><td class="code">{{ cc.parent_code or '—' }}</td>
+          <td><span class="badge {% if cc.fs_type == 'BS' %}badge-blue{% else %}badge-gold{% endif %}">{{ cc.fs_type }}</span></td>
+          <td><button class="btn btn-sm btn-outline" style="color:var(--red);" onclick="delCoA({{ cc.id }})"><i class="ti ti-trash"></i></button></td>
+        </tr>{% endfor %}</tbody>
+      </table>
+      {% else %}<p class="text-muted text-sm">No custom codes yet. Standard 248 codes used by default.</p>{% endif %}
+    </div>
+
   </div>
 </div>
 
-<!-- Modals -->
+<!-- ===== MODALS ===== -->
 <div class="modal-bg" id="newProjectModal"><div class="modal">
-  <div class="modal-header"><h3>Create New Project</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <div class="modal-header"><h3>Create project</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
   <form onsubmit="createProject(event)"><div class="modal-body">
-    <div class="form-group"><label>Financial Year *</label><input type="text" name="financial_year" class="form-control" placeholder="2024-25" required onchange="autoFillDates(this.value)"></div>
-    <div class="grid grid-2">
-      <div class="form-group"><label>BS Date CY</label><input type="date" name="bs_date_cy" id="pj_cy" class="form-control"></div>
-      <div class="form-group"><label>BS Date PY</label><input type="date" name="bs_date_py" id="pj_py" class="form-control"></div>
-    </div>
-    <div class="grid grid-2">
-      <div class="form-group"><label>Company Type</label><select name="company_type" class="form-control">
-        <option value="trading">Trading</option><option value="manufacturing">Manufacturing</option><option value="service">Service</option></select></div>
-      <div class="form-group"><label>Rounding</label><select name="rounding" class="form-control">
-        <option value="Rupees">Rupees</option><option value="Hundreds">Hundreds</option><option value="Thousands">Thousands</option><option value="Lakhs">Lakhs</option></select></div>
-    </div>
-  </div><div class="modal-footer">
-    <button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button>
-    <button type="submit" class="btn btn-gold">Create Project</button>
-  </div></form>
+    <div class="form-group"><label>Financial year *</label><input type="text" name="financial_year" class="form-control" placeholder="2024-25" required onchange="autoFillDates(this.value)"></div>
+    <div class="grid grid-2"><div class="form-group"><label>BS date CY</label><input type="date" name="bs_date_cy" id="pj_cy" class="form-control"></div><div class="form-group"><label>BS date PY</label><input type="date" name="bs_date_py" id="pj_py" class="form-control"></div></div>
+    <div class="grid grid-2"><div class="form-group"><label>Company type</label><select name="company_type" class="form-control"><option value="trading">Trading</option><option value="manufacturing">Manufacturing</option><option value="service">Service</option></select></div><div class="form-group"><label>Rounding</label><select name="rounding" class="form-control"><option value="Rupees">Rupees</option><option value="Hundreds">Hundreds</option><option value="Thousands">Thousands</option><option value="Lakhs">Lakhs</option></select></div></div>
+    <div style="background:var(--blue-pale);padding:10px 12px;border-radius:8px;"><label style="font-size:12px;">Any changes in accounting policies?</label><select name="policy_changed" class="form-control" style="width:100px;"><option value="no">No</option><option value="yes">Yes</option></select></div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-gold">Create</button></div></form>
 </div></div>
 
 <div class="modal-bg" id="dirModal"><div class="modal">
-  <div class="modal-header"><h3>Add Director</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
-  <form onsubmit="addDir(event)"><div class="modal-body">
-    <div class="form-group"><label>Name *</label><input type="text" name="name" class="form-control" required></div>
-    <div class="grid grid-2">
-      <div class="form-group"><label>DIN</label><input type="text" name="din" class="form-control"></div>
-      <div class="form-group"><label>Designation</label><select name="designation" class="form-control"><option>Director</option><option>Managing Director</option><option>Whole-time Director</option><option>Independent Director</option></select></div>
-    </div>
-  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form>
-</div></div>
-
-<div class="modal-bg" id="kmpModal"><div class="modal">
-  <div class="modal-header"><h3>Add KMP</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
-  <form onsubmit="addKMP(event)"><div class="modal-body">
-    <div class="form-group"><label>Name *</label><input type="text" name="name" class="form-control" required></div>
-    <div class="grid grid-2">
-      <div class="form-group"><label>Designation</label><select name="designation" class="form-control"><option>CEO</option><option>CFO</option><option>Company Secretary</option><option>Manager</option></select></div>
-      <div class="form-group"><label>PAN</label><input type="text" name="pan" class="form-control"></div>
-    </div>
-  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form>
+  <div class="modal-header"><h3 id="dirModalTitle">Add director</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="saveDir(event)"><div class="modal-body">
+    <input type="hidden" id="dir_edit_id" value="">
+    <div class="grid grid-2"><div class="form-group"><label>Name *</label><input type="text" id="dir_name" class="form-control" required></div><div class="form-group"><label>DIN</label><input type="text" id="dir_din" class="form-control"></div></div>
+    <div class="grid grid-2"><div class="form-group"><label>Designation</label><select id="dir_desg" class="form-control"><option>Director</option><option>Managing Director</option><option>Whole-time Director</option><option>Independent Director</option></select></div><div class="form-group"><label>PAN</label><input type="text" id="dir_pan" class="form-control"></div></div>
+    <div class="grid grid-2"><div class="form-group"><label>Is KMP?</label><select id="dir_kmp" class="form-control"><option value="false">No</option><option value="true">Yes</option></select></div><div class="form-group"><label>Signs financials?</label><select id="dir_signs" class="form-control"><option value="false">No</option><option value="true">Yes</option></select></div></div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>
 </div></div>
 
 <div class="modal-bg" id="shModal"><div class="modal">
-  <div class="modal-header"><h3>Add Shareholder</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
-  <form onsubmit="addSH(event)"><div class="modal-body">
-    <div class="form-group"><label>Name *</label><input type="text" name="name" class="form-control" required></div>
-    <div class="grid grid-3">
-      <div class="form-group"><label>Shares CY</label><input type="number" name="shares_cy" class="form-control" value="0"></div>
-      <div class="form-group"><label>Shares PY</label><input type="number" name="shares_py" class="form-control" value="0"></div>
-      <div class="form-group"><label>Promoter?</label><select name="is_promoter" class="form-control"><option value="false">No</option><option value="true">Yes</option></select></div>
-    </div>
+  <div class="modal-header"><h3 id="shModalTitle">Add shareholder</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="saveSH(event)"><div class="modal-body">
+    <input type="hidden" id="sh_edit_id" value="">
+    <div class="grid grid-2"><div class="form-group"><label>Name *</label><input type="text" id="sh_name" class="form-control" required></div><div class="form-group"><label>Face value</label><input type="number" id="sh_fv" class="form-control" value="{{ client.face_value or 10 }}"></div></div>
+    <div class="grid grid-2"><div class="form-group"><label>Shares CY</label><input type="number" id="sh_cy" class="form-control" value="0"></div><div class="form-group"><label>Shares PY</label><input type="number" id="sh_py" class="form-control" value="0"></div></div>
+    <div class="grid grid-3"><div class="form-group"><label>Promoter?</label><select id="sh_prom" class="form-control"><option value="false">No</option><option value="true">Yes</option></select></div><div class="form-group"><label>Also director?</label><select id="sh_dir" class="form-control" onchange="document.getElementById('sh_din_grp').style.display=this.value==='true'?'block':'none'"><option value="false">No</option><option value="true">Yes</option></select></div><div class="form-group" id="sh_din_grp" style="display:none;"><label>DIN</label><input type="text" id="sh_din" class="form-control"></div></div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>
+</div></div>
+
+<div class="modal-bg" id="policyModal"><div class="modal" style="max-width:680px;">
+  <div class="modal-header"><h3 id="polModalTitle">Add policy</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="savePolicy(event)"><div class="modal-body">
+    <input type="hidden" id="pol_edit_id" value="">
+    <div class="grid grid-2"><div class="form-group"><label>Number</label><input type="number" id="pol_num" class="form-control" value="{{ (policies|length)+1 }}" required></div><div class="form-group"><label>Title *</label><input type="text" id="pol_title" class="form-control" required></div></div>
+    <div class="form-group"><label>Body *</label><textarea id="pol_body" class="form-control" rows="8" required></textarea></div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>
+</div></div>
+
+<div class="modal-bg" id="coaModal"><div class="modal">
+  <div class="modal-header"><h3>Add custom CoA code</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form onsubmit="addCoA(event)"><div class="modal-body">
+    <div class="grid grid-2"><div class="form-group"><label>Code *</label><input type="text" name="code" class="form-control" required placeholder="BS-AS-01-01-15"></div><div class="form-group"><label>Particulars *</label><input type="text" name="particulars" class="form-control" required></div></div>
+    <div class="grid grid-3"><div class="form-group"><label>Parent code</label><input type="text" name="parent_code" class="form-control" placeholder="BS-AS-01-01"></div><div class="form-group"><label>Nature</label><select name="nature" class="form-control"><option value="Dr">Dr</option><option value="Cr">Cr</option></select></div><div class="form-group"><label>FS type</label><select name="fs_type" class="form-control"><option value="BS">BS</option><option value="PL">PL</option></select></div></div>
   </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form>
 </div></div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+.badge-pill{font-size:11px;padding:2px 10px;border-radius:10px;margin-left:8px;font-weight:500;letter-spacing:0.3px}.badge-pill.blue{background:var(--blue-pale);color:var(--blue)}.badge-pill.grey{background:var(--navy-pale);color:var(--text-light)}
+.split-layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:0;min-height:500px;border:0.5px solid var(--border);border-radius:12px;overflow:hidden;background:var(--white)}
+.master-panel{border-right:0.5px solid var(--border);padding:16px 20px;overflow-y:auto;background:var(--bg)}
+.content-panel{padding:16px 24px;overflow-y:auto}
+.master-label{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;font-weight:500}
+.master-section{margin-bottom:16px}
+.info-tbl{width:100%;font-size:13px}.info-tbl td{padding:3px 0;vertical-align:top}.info-key{color:var(--text-muted);width:70px;font-size:12px}
+.info-card{margin-bottom:12px;padding:10px 14px;background:var(--navy-pale);border-radius:8px}
+.cap-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:4px}.cap-val{font-weight:600;font-size:13px}
+.block-card{border:0.5px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:all 0.15s;background:var(--white)}
+.block-card:hover{background:var(--navy-pale);border-color:var(--gold)}
+.block-top{display:flex;justify-content:space-between;align-items:center}.block-title{font-size:12px;font-weight:500}.block-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.block-count{font-size:11px;padding:1px 8px;border-radius:10px;font-weight:600}.block-count.info{background:var(--blue-pale);color:var(--blue)}.block-count.green{background:var(--green-pale);color:var(--green)}.block-count.gold{background:var(--gold-light);color:#8a6d00}.block-count.purple{background:#EEEDFE;color:#534AB7}
+.project-card{border:0.5px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:12px;background:var(--white);transition:box-shadow 0.15s}
+.project-card:hover{box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+.project-stats{display:flex;gap:14px;margin-top:10px;font-size:12px;color:var(--text-light)}.project-stats span{display:inline-flex;align-items:center;gap:4px}.project-stats i{font-size:14px}
+.status-pill{font-size:11px;padding:3px 10px;border-radius:10px;font-weight:500}.status-pill.grey{background:var(--navy-pale);color:var(--text-light)}.status-pill.blue{background:var(--blue-pale);color:var(--blue)}.status-pill.gold{background:var(--gold-light);color:#8a6d00}.status-pill.green{background:var(--green-pale);color:var(--green)}
+.policy-card{border:0.5px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--white)}
+.form-group.compact{margin-bottom:8px}.form-group.compact label{font-size:11px;margin-bottom:2px}.form-group.compact .form-control{padding:4px 8px;font-size:12px}
+.empty-hint{padding:14px;border:1px dashed var(--border-dark);border-radius:8px;text-align:center;color:var(--text-muted);font-size:13px;cursor:pointer;transition:all 0.15s;margin-top:12px}
+.empty-hint:hover{background:var(--navy-pale);color:var(--text);border-color:var(--gold)}
+.workflow-bar{display:flex;gap:4px;font-size:11px;margin-top:8px}
+.wf-step{flex:1;text-align:center;padding:8px 4px;background:var(--navy-pale);border-radius:6px;color:var(--text-light);text-decoration:none;transition:all 0.15s;font-weight:500}
+.wf-step:hover{background:var(--gold-light);color:#8a6d00}
+@media(max-width:768px){.split-layout{grid-template-columns:1fr}.master-panel{border-right:none;border-bottom:0.5px solid var(--border)}}
+</style>
 <script>
-const CID = {{ client.id }};
-function showTab(id,el){document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).style.display='block';el.classList.add('active');if(id==='shareholders')loadSH();}
+const CID={{ client.id }};const FV={{ client.face_value or 10 }};
 
-function autoFillDates(fy){
-  const m=fy.match(/(\d{4})-(\d{2})/);
-  if(m){const y2=m[1].slice(0,2)+m[2];document.getElementById('pj_cy').value=y2+'-03-31';document.getElementById('pj_py').value=m[1]+'-03-31';}}
+function openBlock(name){
+  ['projects','directors','shareholders','policies','customcoa'].forEach(b=>{
+    document.getElementById('panel-'+b).style.display=b===name?'':'none';
+  });
+}
 
-async function saveClient(){
-  await fetch('/api/clients/'+CID,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    name:cl_name.value,cin:cl_cin.value,pan:cl_pan.value,gstin:cl_gstin.value,
-    registered_office:cl_addr.value,principal_activity:cl_activity.value,
-    face_value:parseFloat(cl_fv.value),authorized_capital:parseFloat(cl_auth.value),
-    paid_up_capital:parseFloat(cl_paid.value),auditor_name:cl_aud.value,auditor_frn:cl_frn.value})});
-  const s=document.getElementById('masterSaved');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),2000);}
+function toggleMasterEdit(){const v=document.getElementById('masterView'),e=document.getElementById('masterEdit');
+  if(e.style.display==='none'){v.style.display='none';e.style.display='';}
+  else{v.style.display='';e.style.display='none';}}
 
-async function createProject(e){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));d.client_id=CID;
-  if(!d.bs_date_cy)delete d.bs_date_cy;if(!d.bs_date_py)delete d.bs_date_py;
-  const r=await fetch('/api/projects/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
-  if(r.ok){const j=await r.json();location.href='/project/'+j.id;}else alert((await r.json()).detail);}
+function autoFillDates(fy){const m=fy.match(/(\d{4})-(\d{2})/);if(m){document.getElementById('pj_cy').value=m[1].slice(0,2)+m[2]+'-03-31';document.getElementById('pj_py').value=m[1]+'-03-31';}}
 
-async function deleteProject(id,fy){if(!confirm('Delete project FY '+fy+'? This will delete ALL data for this year.')){return;}
-  if(!confirm('FINAL CONFIRMATION: Delete FY '+fy+'? This cannot be undone.')){return;}
-  await fetch('/api/projects/'+id,{method:'DELETE'});location.reload();}
+async function saveMaster(){const fv=parseFloat(cl_fv.value)||10;
+  const r=await fetch('/api/clients/'+CID,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    name:cl_name.value,cin:cl_cin.value,pan:cl_pan.value,gstin:cl_gstin.value,registered_office:cl_addr.value,principal_activity:cl_activity.value,face_value:fv,
+    auditor_name:cl_aud.value,auditor_frn:cl_frn.value,auditor_membership_no:cl_mno.value,
+    authorised_shares:parseInt(cap_auth.value)||0,subscribed_shares:parseInt(cap_sub.value)||0,paidup_shares:parseInt(cap_paid.value)||0,
+    authorised_capital:(parseInt(cap_auth.value)||0)*fv,subscribed_capital:(parseInt(cap_sub.value)||0)*fv,paidup_capital:(parseInt(cap_paid.value)||0)*fv})});
+  if(r.ok){document.getElementById('masterSaved').classList.add('show');setTimeout(()=>location.reload(),900);}
+  else alert('Save failed');}
 
-async function deleteClient(){
-  {% if projects|length > 0 %}alert('Cannot delete client with existing projects. Delete all projects first.');return;{% endif %}
-  if(!confirm('Delete {{ client.name }}?')){return;}if(!confirm('FINAL CONFIRMATION: This cannot be undone.')){return;}
-  await fetch('/api/clients/'+CID,{method:'DELETE'});location.href='/';}
+async function createProject(e){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));d.client_id=CID;if(!d.bs_date_cy)delete d.bs_date_cy;if(!d.bs_date_py)delete d.bs_date_py;
+  const r=await fetch('/api/projects/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(r.ok){const j=await r.json();location.href='/project/'+j.id;}else alert((await r.json()).detail);}
+async function deleteProject(id,fy){if(!confirm('Delete FY '+fy+'?'))return;if(!confirm('CONFIRM: All data lost.'))return;await fetch('/api/projects/'+id,{method:'DELETE'});location.reload();}
+async function duplicateProject(id,fy){if(!confirm('Duplicate FY '+fy+' with all data (TB, mapping, audit entries, supplementary)?'))return;
+  const r=await fetch('/api/projects/'+id+'/duplicate',{method:'POST'});
+  if(r.ok){const j=await r.json();alert('Duplicated as V'+j.version+'. Opening...');location.href='/project/'+j.id;}
+  else alert('Duplicate failed');}
 
-async function addDir(e){e.preventDefault();const f=e.target;
-  await fetch('/api/directors/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:CID,name:f.name.value,din:f.din.value,designation:f.designation.value})});location.reload();}
-async function deleteDir(id){if(confirm('Remove?')){await fetch('/api/directors/'+id,{method:'DELETE'});location.reload();}}
-async function addKMP(e){e.preventDefault();const f=e.target;
-  await fetch('/api/kmp/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:CID,name:f.name.value,designation:f.designation.value,pan:f.pan.value})});location.reload();}
+// Directors
+function openDirModal(){dir_edit_id.value='';dir_name.value='';dir_din.value='';dir_pan.value='';dir_desg.value='Director';dir_kmp.value='false';dir_signs.value='false';document.getElementById('dirModalTitle').textContent='Add director';document.getElementById('dirModal').classList.add('show');}
+function editDir(id,name,din,desg,pan,kmp,signs){dir_edit_id.value=id;dir_name.value=name;dir_din.value=din;dir_desg.value=desg;dir_pan.value=pan;dir_kmp.value=kmp?'true':'false';dir_signs.value=signs?'true':'false';document.getElementById('dirModalTitle').textContent='Edit director';document.getElementById('dirModal').classList.add('show');}
+async function saveDir(e){e.preventDefault();const id=dir_edit_id.value;const body={client_id:CID,name:dir_name.value,din:dir_din.value,designation:dir_desg.value,pan:dir_pan.value,is_kmp:dir_kmp.value==='true',signs_financials:dir_signs.value==='true'};
+  const url=id?'/api/directors/'+id:'/api/directors/';const method=id?'PUT':'POST';
+  await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});location.reload();}
+async function deleteDir(id){if(confirm('Remove director?')){await fetch('/api/directors/'+id,{method:'DELETE'});location.reload();}}
 
-async function loadSH(){const r=await fetch('/api/share-capital/0/shareholders'.replace('0','{{ projects[0].id if projects else 0 }}'));
-  if(!r.ok){document.getElementById('shList').innerHTML='<p class="text-muted">Create a project first to manage shareholders.</p>';return;}
-  const d=await r.json();let h='<table class="tbl"><thead><tr><th>Name</th><th>Shares CY</th><th>%</th><th>Promoter</th></tr></thead><tbody>';
-  (d.all_shareholders||[]).forEach(s=>{h+=`<tr><td>${s.name}</td><td class="num">${s.shares_cy.toLocaleString()}</td><td class="num">${s.pct_cy}%</td><td>${s.is_promoter?'Yes':''}</td></tr>`;});
-  h+='</tbody></table>';document.getElementById('shList').innerHTML=h;}
-async function addSH(e){e.preventDefault();const f=e.target;const pid={{ projects[0].id if projects else 0 }};
-  if(!pid){alert('Create a project first.');return;}
-  await fetch('/api/shareholders/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:pid,name:f.name.value,no_of_shares_cy:parseInt(f.shares_cy.value)||0,no_of_shares_py:parseInt(f.shares_py.value)||0,is_promoter:f.is_promoter.value==='true'})});loadSH();document.getElementById('shModal').classList.remove('show');}
+// Shareholders
+function openSHModal(){sh_edit_id.value='';sh_name.value='';sh_cy.value=0;sh_py.value=0;sh_fv.value=FV;sh_prom.value='false';sh_dir.value='false';sh_din.value='';document.getElementById('sh_din_grp').style.display='none';document.getElementById('shModalTitle').textContent='Add shareholder';document.getElementById('shModal').classList.add('show');}
+function editSH(id,name,cy,py,fv,prom,isDir,din){sh_edit_id.value=id;sh_name.value=name;sh_cy.value=cy;sh_py.value=py;sh_fv.value=fv;sh_prom.value=prom?'true':'false';sh_dir.value=isDir?'true':'false';sh_din.value=din;document.getElementById('sh_din_grp').style.display=isDir?'block':'none';document.getElementById('shModalTitle').textContent='Edit shareholder';document.getElementById('shModal').classList.add('show');}
+async function saveSH(e){e.preventDefault();const id=sh_edit_id.value;const body={client_id:CID,name:sh_name.value,no_of_shares_cy:parseInt(sh_cy.value)||0,no_of_shares_py:parseInt(sh_py.value)||0,face_value:parseFloat(sh_fv.value)||FV,is_promoter:sh_prom.value==='true',is_director:sh_dir.value==='true',din:sh_din.value||null};
+  const url=id?'/api/client-shareholders/'+id:'/api/client-shareholders/';const method=id?'PUT':'POST';
+  await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});location.reload();}
+async function deleteSH(id){if(confirm('Remove?')){await fetch('/api/client-shareholders/'+id,{method:'DELETE'});location.reload();}}
+
+// Policies
+function openPolicyModal(){pol_edit_id.value='';pol_num.value={{ (policies|length)+1 }};pol_title.value='';pol_body.value='';document.getElementById('polModalTitle').textContent='Add policy';document.getElementById('policyModal').classList.add('show');}
+async function editPolicyInline(id){
+  const r=await fetch('/api/client-policies/'+CID);const all=await r.json();const p=all.find(x=>x.id===id);
+  if(!p)return;
+  pol_edit_id.value=id;pol_num.value=p.policy_number;pol_title.value=p.title;pol_body.value=p.body;
+  document.getElementById('polModalTitle').textContent='Edit policy';
+  document.getElementById('policyModal').classList.add('show');
+}
+async function savePolicy(e){e.preventDefault();const id=pol_edit_id.value;const body={client_id:CID,policy_number:parseInt(pol_num.value),title:pol_title.value,body:pol_body.value};
+  const url=id?'/api/client-policies/'+id:'/api/client-policies/';const method=id?'PUT':'POST';
+  await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});location.reload();}
+async function delPolicy(id){if(confirm('Remove?')){await fetch('/api/client-policies/'+id,{method:'DELETE'});location.reload();}}
+async function seedDefaultPolicies(){
+  const defaults=[
+    {n:1,t:'Basis of preparation',b:'The financial statements are prepared under historical cost convention on accrual basis in accordance with Indian GAAP and Accounting Standards specified under Section 133 of the Companies Act, 2013 read with Rule 7 of the Companies (Accounts) Rules, 2014.'},
+    {n:2,t:'Use of estimates',b:'The preparation of financial statements requires management to make estimates and assumptions that affect the reported amounts. Actual results could differ from those estimates. Differences between actual results and estimates are recognised in the period in which the results are known.'},
+    {n:3,t:'Revenue recognition',b:'Revenue is recognised to the extent that it is probable that the economic benefits will flow to the Company and the revenue can be reliably measured. Revenue from sale of goods is recognised when significant risks and rewards of ownership are transferred to the buyer.'},
+    {n:4,t:'Property, plant and equipment',b:'Property, plant and equipment are stated at historical cost less accumulated depreciation. Cost comprises the purchase price and any attributable cost of bringing the asset to its working condition for its intended use.'},
+    {n:5,t:'Depreciation',b:'Depreciation is provided on the Written Down Value (WDV) method / Straight Line Method (SLM) over the useful life of assets as prescribed in Schedule II to the Companies Act, 2013.'},
+    {n:6,t:'Intangible assets',b:'Intangible assets are recognised when it is probable that future economic benefits attributable to the asset will flow to the enterprise and the cost of the asset can be measured reliably. Intangible assets are amortised over their estimated useful life on a straight-line basis.'},
+    {n:7,t:'Investments',b:'Investments that are readily realisable and intended to be held for not more than one year are classified as current investments, carried at lower of cost and fair value. Long-term investments are carried at cost less permanent diminution in value, if any.'},
+    {n:8,t:'Inventories',b:'Inventories are valued at the lower of cost and net realisable value. Cost is determined on First In First Out (FIFO) / Weighted Average basis. Net realisable value is the estimated selling price less estimated costs necessary to make the sale.'},
+    {n:9,t:'Employee benefits',b:'Contributions to defined contribution schemes like Provident Fund and ESI are charged to the Statement of Profit and Loss on accrual basis. Liability for defined benefit plans like gratuity is provided on the basis of actuarial valuation carried out at the year end.'},
+    {n:10,t:'Borrowing costs',b:'Borrowing costs directly attributable to the acquisition, construction or production of a qualifying asset are capitalised as part of the cost of that asset. Other borrowing costs are recognised as an expense in the period in which they are incurred.'},
+    {n:11,t:'Taxation',b:'Tax expense comprises current tax and deferred tax. Current tax is measured at the amount expected to be paid using the applicable tax rates. Deferred tax is recognised on timing differences between taxable income and accounting income subject to the consideration of prudence.'},
+    {n:12,t:'Provisions and contingencies',b:'Provisions are recognised when the Company has a present obligation as a result of past events, it is probable that an outflow of resources will be required, and the amount can be reliably estimated. Contingent liabilities are disclosed in the notes.'},
+    {n:13,t:'Earnings per share',b:'Basic EPS is calculated by dividing the net profit or loss for the period attributable to equity shareholders by the weighted average number of equity shares outstanding during the period. Diluted EPS is computed using the weighted average number of equity and dilutive potential equity shares.'},
+    {n:14,t:'Cash flow statement',b:'Cash flows are reported using the indirect method, whereby profit before tax is adjusted for the effects of transactions of a non-cash nature and any deferrals or accruals of past or future cash receipts or payments.'},
+    {n:15,t:'Foreign currency transactions',b:'Transactions in foreign currencies are recorded at the exchange rate prevailing on the date of the transaction. Monetary assets and liabilities denominated in foreign currencies are translated at the exchange rate prevailing at the balance sheet date. Exchange differences arising on settlement or translation are recognised in the Statement of Profit and Loss.'},
+  ];
+  for(const p of defaults){await fetch('/api/client-policies/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:CID,policy_number:p.n,title:p.t,body:p.b})});}
+  location.reload();}
+
+// Custom CoA
+async function addCoA(e){e.preventDefault();const f=e.target;
+  await fetch('/api/custom-coa/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:CID,code:f.code.value,particulars:f.particulars.value,parent_code:f.parent_code.value,nature:f.nature.value,fs_type:f.fs_type.value})});location.reload();}
+async function delCoA(id){if(confirm('Remove?')){await fetch('/api/custom-coa/'+id,{method:'DELETE'});location.reload();}}
+
+// Close modals on backdrop click
+document.querySelectorAll('.modal-bg').forEach(m=>{m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('show');});});
 </script>
 {% endblock %}

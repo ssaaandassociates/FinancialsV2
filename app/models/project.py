@@ -26,11 +26,13 @@ class Project(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     financial_year = Column(String(10), nullable=False)
+    version = Column(Integer, default=1)  # V1, V2... for duplicate FY
     bs_date_cy = Column(Date)
     bs_date_py = Column(Date)
     rounding = Column(String(20), default="Rupees")
     company_type = Column(String(20), default=CompanyType.TRADING.value)
     status = Column(String(20), default=ProjectStatus.SETUP.value)
+    policy_changed = Column(String(5), default="no")  # "yes" = editable copy, "no" = inherit client
 
     client = relationship("Client", back_populates="projects")
     trial_balances = relationship("TrialBalance", back_populates="project", cascade="all, delete-orphan")

@@ -258,3 +258,171 @@ def generate_tp_ageing_schedule(db: Session, project_id: int) -> dict:
         result[period.lower()] = matrix
 
     return result
+
+
+# =========================================================================
+# TB-DERIVED AGEING (Section 5 — V9)
+# Build ageing matrix DIRECTLY from TB ledgers mapped to BS-AS-02-03-XX / BS-EL-04-02-XX
+# No separate AgeingData upload needed.
+# =========================================================================
+
+# Map from leaf-code suffix → (category, bucket_index) for TR
+# Buckets: 0=<6M, 1=6M-1Y, 2=1-2Y, 3=2-3Y, 4=>3Y
+_TR_LEAF_MAP = {
+    "01": ("undisputed_good", 0),
+    "02": ("undisputed_good", 1),
+    "03": ("undisputed_good", 2),
+    "04": ("undisputed_good", 3),
+    "05": ("undisputed_good", 4),
+    "06": ("undisputed_doubtful", 0),
+    "07": ("undisputed_doubtful", 1),
+    "08": ("undisputed_doubtful", 2),
+    "09": ("undisputed_doubtful", 3),
+    "10": ("undisputed_doubtful", 4),
+    "11": ("disputed_good", 0),
+    "12": ("disputed_good", 1),
+    "13": ("disputed_good", 2),
+    "14": ("disputed_good", 3),
+    "15": ("disputed_good", 4),
+    "16": ("disputed_doubtful", 0),
+    "17": ("disputed_doubtful", 1),
+    "18": ("disputed_doubtful", 2),
+    "19": ("disputed_doubtful", 3),
+    "20": ("disputed_doubtful", 4),
+    "21": ("others", 0),  # 'TR Others' — put in <6M bucket, also flagged 'others'
+}
+
+# Map from leaf-code suffix → (category, bucket_index) for TP
+# Buckets: 0=<1Y, 1=1-2Y, 2=2-3Y, 3=>3Y
+_TP_LEAF_MAP = {
+    "01": ("msme_undisputed", 0),
+    "02": ("msme_undisputed", 1),
+    "03": ("msme_undisputed", 2),
+    "04": ("msme_undisputed", 3),
+    "05": ("other_undisputed", 0),
+    "06": ("other_undisputed", 1),
+    "07": ("other_undisputed", 2),
+    "08": ("other_undisputed", 3),
+    "09": ("msme_disputed", 0),
+    "10": ("msme_disputed", 1),
+    "11": ("msme_disputed", 2),
+    "12": ("msme_disputed", 3),
+    "13": ("other_disputed", 0),
+    "14": ("other_disputed", 1),
+    "15": ("other_disputed", 2),
+    "16": ("other_disputed", 3),
+    "17": ("unbilled", 0),
+}
+
+TR_PREFIX = "BS-AS-02-03-"
+TP_PREFIX = "BS-EL-04-02-"
+
+
+def derive_tr_matrix_from_tb(db: Session, project_id: int) -> dict:
+    """
+    Build TR ageing matrix from TB ledgers mapped to BS-AS-02-03-XX codes.
+    Returns: {"cy": {category: [b1,b2,b3,b4,b5,total], ...}, "py": {...}}
+    """
+    from app.models import TrialBalance
+    tb_rows = db.query(TrialBalance).filter(
+        TrialBalance.project_id == project_id,
+        TrialBalance.coa_code.like("BS-AS-02-03-%")
+    ).all()
+
+    def empty_matrix():
+        m = {
+            "undisputed_good": [0, 0, 0, 0, 0],
+            "undisputed_doubtful": [0, 0, 0, 0, 0],
+            "disputed_good": [0, 0, 0, 0, 0],
+            "disputed_doubtful": [0, 0, 0, 0, 0],
+            "others": [0, 0, 0, 0, 0],
+            "total": [0, 0, 0, 0, 0],
+        }
+        return m
+
+    cy_m = empty_matrix()
+    py_m = empty_matrix()
+
+    for r in tb_rows:
+        if not r.coa_code or len(r.coa_code) < len(TR_PREFIX) + 2:
+            continue
+        suffix = r.coa_code[len(TR_PREFIX):len(TR_PREFIX) + 2]
+        mapping = _TR_LEAF_MAP.get(suffix)
+        if not mapping:
+            continue
+        cat, idx = mapping
+        cy_m[cat][idx] += r.cy_net or 0
+        py_m[cat][idx] += r.py_net or 0
+        cy_m["total"][idx] += r.cy_net or 0
+        py_m["total"][idx] += r.py_net or 0
+
+    # Row totals (append 6th cell = sum of all buckets)
+    for m in (cy_m, py_m):
+        for k in list(m.keys()):
+            m[k] = m[k] + [sum(m[k])]
+        m["grand_total"] = sum(m["total"][:-1])
+
+    return {"cy": cy_m, "py": py_m, "source": "TB"}
+
+
+def derive_tp_matrix_from_tb(db: Session, project_id: int) -> dict:
+    """
+    Build TP ageing matrix from TB ledgers mapped to BS-EL-04-02-XX codes.
+    Returns: {"cy": {category: [b1,b2,b3,b4,total], ...}, "py": {...}}
+    """
+    from app.models import TrialBalance
+    tb_rows = db.query(TrialBalance).filter(
+        TrialBalance.project_id == project_id,
+        TrialBalance.coa_code.like("BS-EL-04-02-%")
+    ).all()
+
+    def empty_matrix():
+        return {
+            "msme_undisputed": [0, 0, 0, 0],
+            "other_undisputed": [0, 0, 0, 0],
+            "msme_disputed": [0, 0, 0, 0],
+            "other_disputed": [0, 0, 0, 0],
+            "unbilled": [0, 0, 0, 0],
+            "total": [0, 0, 0, 0],
+        }
+
+    cy_m = empty_matrix()
+    py_m = empty_matrix()
+
+    for r in tb_rows:
+        if not r.coa_code or len(r.coa_code) < len(TP_PREFIX) + 2:
+            continue
+        suffix = r.coa_code[len(TP_PREFIX):len(TP_PREFIX) + 2]
+        mapping = _TP_LEAF_MAP.get(suffix)
+        if not mapping:
+            continue
+        cat, idx = mapping
+        # TP amounts are credit; cy_net = debit - credit, so a credit balance is negative.
+        # We want to show the credit balance as positive in the ageing matrix.
+        amount_cy = -(r.cy_net or 0)
+        amount_py = -(r.py_net or 0)
+        cy_m[cat][idx] += amount_cy
+        py_m[cat][idx] += amount_py
+        cy_m["total"][idx] += amount_cy
+        py_m["total"][idx] += amount_py
+
+    for m in (cy_m, py_m):
+        for k in list(m.keys()):
+            m[k] = m[k] + [sum(m[k])]
+        m["grand_total"] = sum(m["total"][:-1])
+
+    return {"cy": cy_m, "py": py_m, "source": "TB"}
+
+
+def has_any_tr_tp_mapping(db: Session, project_id: int) -> dict:
+    """Quick check whether the project has any TB rows mapped to TR/TP leaf codes."""
+    from app.models import TrialBalance
+    tr_count = db.query(TrialBalance).filter(
+        TrialBalance.project_id == project_id,
+        TrialBalance.coa_code.like("BS-AS-02-03-%")
+    ).count()
+    tp_count = db.query(TrialBalance).filter(
+        TrialBalance.project_id == project_id,
+        TrialBalance.coa_code.like("BS-EL-04-02-%")
+    ).count()
+    return {"tr_ledgers": tr_count, "tp_ledgers": tp_count}

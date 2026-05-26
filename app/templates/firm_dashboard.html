@@ -3,6 +3,8 @@
 {% block page_title %}SSAA Financials Tool{% endblock %}
 
 {% block actions %}
+<a href="/api/db/backup" class="btn btn-outline btn-sm" download title="Download database backup">⬇ Backup</a>
+<button class="btn btn-outline btn-sm" onclick="document.getElementById('restoreModal').classList.add('show')" title="Restore from backup">⬆ Restore</button>
 <button class="btn btn-primary" onclick="document.getElementById('newClientModal').classList.add('show')">+ New Client</button>
 {% endblock %}
 
@@ -73,5 +75,24 @@ function searchClients(q){q=q.toLowerCase();document.querySelectorAll('.client-c
 async function createClient(e){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));d.face_value=Number(d.face_value)||10;d.paid_up_capital=Number(d.paid_up_capital)||0;
   const r=await fetch('/api/clients/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
   if(r.ok){const j=await r.json();location.href='/client/'+j.id;}else alert('Error: '+(await r.json()).detail);}
+async function restoreDB(e){e.preventDefault();
+  if(!confirm('This will replace ALL current data with the backup file. Continue?'))return;
+  if(!confirm('FINAL WARNING: All current data will be lost. Are you sure?'))return;
+  const fd=new FormData(document.getElementById('restoreForm'));
+  const r=await fetch('/api/db/restore',{method:'POST',body:fd});const j=await r.json();
+  if(r.ok){alert('Database restored ('+j.size_bytes+' bytes). Page will reload.');location.reload();}
+  else alert('Error: '+(j.detail||JSON.stringify(j)));}
 </script>
 {% endblock %}
+
+<!-- H8: Restore Modal -->
+<div class="modal-bg" id="restoreModal"><div class="modal">
+  <div class="modal-header"><h3>Restore Database</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
+  <form id="restoreForm" onsubmit="restoreDB(event)"><div class="modal-body">
+    <div class="alert alert-danger mb-4">This will replace ALL current data with the backup file. This cannot be undone.</div>
+    <div class="form-group"><label>Backup File (.db)</label><input type="file" name="file" class="form-control" accept=".db" required></div>
+  </div><div class="modal-footer">
+    <button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button>
+    <button type="submit" class="btn btn-danger">Restore</button>
+  </div></form>
+</div></div>

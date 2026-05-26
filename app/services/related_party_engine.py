@@ -137,3 +137,86 @@ def generate_rp_disclosure(db: Session, project_id: int) -> dict:
         "transaction_types": TRANSACTION_TYPES,
         "categories": PARTY_CATEGORIES,
     }
+
+
+# =========================================================================
+# Section 7 V9 — Per-party transactions, edit/delete, KMP autocomplete
+# =========================================================================
+
+def list_transactions_for_party(db: Session, party_id: int) -> list[dict]:
+    """Return all transactions for one party."""
+    txns = db.query(RPTransaction).filter(
+        RPTransaction.party_id == party_id
+    ).order_by(RPTransaction.transaction_type).all()
+    return [
+        {
+            "id": t.id,
+            "transaction_type": t.transaction_type,
+            "cy_amount": t.cy_amount or 0,
+            "py_amount": t.py_amount or 0,
+        }
+        for t in txns
+    ]
+
+
+def update_rp_transaction(db: Session, txn_id: int,
+                          transaction_type: str = None,
+                          cy_amount: float = None,
+                          py_amount: float = None) -> RPTransaction | None:
+    txn = db.query(RPTransaction).filter(RPTransaction.id == txn_id).first()
+    if not txn:
+        return None
+    if transaction_type is not None:
+        txn.transaction_type = transaction_type
+    if cy_amount is not None:
+        txn.cy_amount = cy_amount
+    if py_amount is not None:
+        txn.py_amount = py_amount
+    db.commit()
+    db.refresh(txn)
+    return txn
+
+
+def delete_rp_transaction(db: Session, txn_id: int) -> bool:
+    n = db.query(RPTransaction).filter(RPTransaction.id == txn_id).delete()
+    db.commit()
+    return n > 0
+
+
+def get_kmp_candidates_for_client(db: Session, client_id: int) -> list[dict]:
+    """
+    Return all candidates that could be Related Parties from client master:
+    - All Directors (KMP or not — user can pick category)
+    - Directors flagged is_kmp=True are highlighted
+    """
+    from app.models.client import Director, ClientShareholder
+    directors = db.query(Director).filter(
+        Director.client_id == client_id, Director.is_active == True
+    ).all()
+    shareholders = db.query(ClientShareholder).filter(
+        ClientShareholder.client_id == client_id
+    ).all()
+    candidates = []
+    for d in directors:
+        candidates.append({
+            "source": "director",
+            "name": d.name,
+            "din_pan": d.din or "",
+            "designation": d.designation or "Director",
+            "is_kmp": bool(d.is_kmp),
+            "suggested_category": "KMP" if d.is_kmp else "Relative of KMP",
+        })
+    # Promoters who aren't directors → likely entities/relatives
+    director_names = {d.name.strip().lower() for d in directors}
+    for s in shareholders:
+        if s.name.strip().lower() in director_names:
+            continue  # already covered as director
+        candidates.append({
+            "source": "shareholder",
+            "name": s.name,
+            "din_pan": s.din or s.pan or "",
+            "designation": "Promoter" if s.is_promoter else "Shareholder",
+            "is_kmp": False,
+            "suggested_category": "Entity" if not s.is_director else "KMP",
+        })
+    return candidates

@@ -183,6 +183,71 @@ def save_signing(payload: SigningInput, db: Session = Depends(get_db)):
         return {"id": sb.id, "status": "created"}
 
 
+@router.post("/signing/{project_id}/auto-populate")
+def auto_populate_signing(project_id: int, db: Session = Depends(get_db)):
+    """
+    Auto-fill signing block from client master:
+    - Auditor from Client.auditor_name / .auditor_frn / .auditor_membership_no
+    - Director1 + Director2 from Directors where signs_financials=True
+    """
+    from app.models import Project, Client, Director
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return {"error": "project_not_found"}
+    client = db.query(Client).filter(Client.id == project.client_id).first()
+    if not client:
+        return {"error": "client_not_found"}
+
+    signing_directors = (
+        db.query(Director)
+        .filter(Director.client_id == client.id, Director.signs_financials == True)
+        .order_by(Director.id)
+        .all()
+    )
+
+    sb = db.query(SigningBlock).filter(SigningBlock.project_id == project_id).first()
+    created = False
+    if not sb:
+        sb = SigningBlock(project_id=project_id)
+        db.add(sb)
+        created = True
+
+    # Auditor
+    sb.auditor_firm = client.auditor_name or sb.auditor_firm
+    sb.auditor_frn = client.auditor_frn or sb.auditor_frn
+    sb.partner_membership_no = client.auditor_membership_no or sb.partner_membership_no
+
+    # Directors
+    if len(signing_directors) >= 1:
+        d1 = signing_directors[0]
+        sb.director1_name = d1.name
+        sb.director1_din = d1.din
+        sb.director1_designation = d1.designation or "Director"
+    if len(signing_directors) >= 2:
+        d2 = signing_directors[1]
+        sb.director2_name = d2.name
+        sb.director2_din = d2.din
+        sb.director2_designation = d2.designation or "Director"
+
+    db.commit()
+    db.refresh(sb)
+
+    return {
+        "id": sb.id,
+        "status": "created" if created else "updated",
+        "auditor_firm": sb.auditor_firm,
+        "auditor_frn": sb.auditor_frn,
+        "partner_membership_no": sb.partner_membership_no,
+        "director1_name": sb.director1_name,
+        "director1_din": sb.director1_din,
+        "director2_name": sb.director2_name,
+        "director2_din": sb.director2_din,
+        "signing_directors_found": len(signing_directors),
+        "auditor_found": bool(client.auditor_name),
+    }
+
+
 # ============= RATIO PY-1 VALUES =============
 
 class RatioPY1Input(BaseModel):

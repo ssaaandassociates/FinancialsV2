@@ -1,55 +1,63 @@
 {% extends "base_project.html" %}
 {% set active = "data" %}
-{% block title %}Supplementary Data — {{ project.financial_year }}{% endblock %}
+{% block title %}Data Entry — {{ project.financial_year }}{% endblock %}
 {% block page_title %}③ Supplementary Data{% endblock %}
 
 {% block actions %}
-<a href="/project/{{ project.id }}/upload" class="btn btn-outline btn-sm">← Upload</a>
+<a href="/project/{{ project.id }}/upload" class="btn btn-outline btn-sm">← Back</a>
 <a href="/project/{{ project.id }}/enrich" class="btn btn-gold btn-sm">Next →</a>
 {% endblock %}
 
 {% block content %}
 <div class="tabs mb-6">
+  {% if not is_service_company %}
   <div class="tab active" onclick="showTab('stock',this)">Closing Stock</div>
   <div class="tab" onclick="showTab('ppe',this)">PPE Schedule</div>
+  {% else %}
+  <div class="tab active" onclick="showTab('ppe',this)">PPE Schedule</div>
+  {% endif %}
   <div class="tab" onclick="showTab('rp',this)">Related Party</div>
   <div class="tab" onclick="showTab('ageing',this)">Ageing</div>
-  <div class="tab" onclick="showTab('ratio',this)">Ratio Data</div>
+  <div class="tab" onclick="showTab('ratio',this)">Ratio PY-1</div>
 </div>
 
+{% if is_service_company %}
+<div class="alert alert-info mb-4" style="font-size:12px;">
+  <strong>Service company:</strong> Closing Stock tab hidden (not applicable). Change company type on the project dashboard if this is incorrect.
+</div>
+{% endif %}
+
+{% if not is_service_company %}
+<!-- Closing Stock (hidden for service companies) -->
 <div id="tab-stock" class="tab-content">
-{% if stock_types %}
-  <div class="card"><div class="card-header"><h3>Closing Stock ({{ proj_obj.company_type|title }})</h3></div>
-  <div class="card-body">
-    <div class="alert alert-info mb-4">Not in TB. Auto-adjusts P&L and BS.</div>
-    <table class="tbl"><thead><tr><th>Type</th><th>Code</th><th class="num">CY</th><th class="num">PY</th><th></th></tr></thead><tbody>
-      {% for st in stock_types %}{% set ex=closing_stock|selectattr('stock_type','equalto',st.key)|list %}{% set cs=ex[0] if ex else {} %}
-      <tr><td><strong>{{ st.label }}</strong></td><td class="code">{{ st.bs_code }}</td>
-        <td><input type="number" id="cs_cy_{{ st.key }}" class="form-control" style="width:140px;text-align:right;" value="{{ cs.get('cy_amount',0) }}"></td>
-        <td><input type="number" id="cs_py_{{ st.key }}" class="form-control" style="width:140px;text-align:right;" value="{{ cs.get('py_amount',0) }}"></td>
-        <td><button class="btn btn-sm btn-primary" onclick="saveCS('{{ st.key }}')">Save</button></td></tr>
-      {% endfor %}</tbody></table><div id="csResult" class="mt-4"></div>
+  <div class="card"><div class="card-header"><h3>Closing Stock</h3></div><div class="card-body">
+    <div class="alert alert-info mb-4">Enter closing stock separately (not in TB). Values auto-flow to BS (Inventories) and PL (Changes in Inventories).</div>
+    {% for t,l in [('raw_materials','Raw Materials'),('work_in_progress','Work in Progress'),('finished_goods','Finished Goods'),('stock_in_trade','Stock in Trade')] %}
+    <div class="flex gap-4 items-center mb-4" style="max-width:600px;">
+      <label style="width:160px;font-weight:600;font-size:13px;">{{ l }}</label>
+      <input type="number" id="cs_cy_{{ t }}" class="form-control" style="width:140px;" placeholder="CY" value="{{ closing_stock.get(t,{}).get('cy',0) }}">
+      <input type="number" id="cs_py_{{ t }}" class="form-control" style="width:140px;" placeholder="PY" value="{{ closing_stock.get(t,{}).get('py',0) }}">
+      <button class="btn btn-sm btn-primary" onclick="saveCS('{{ t }}')">Save</button>
+    </div>{% endfor %}
+    <div id="csResult" class="mt-4"></div>
   </div></div>
-{% else %}<div class="alert alert-info">Service company — no stock.</div>{% endif %}
 </div>
+{% endif %}
 
-<div id="tab-ppe" class="tab-content" style="display:none;">
-  <div class="card"><div class="card-header"><h3>PPE Schedule</h3>
-    {% if ppe.is_valid %}<span class="badge badge-green">OK</span>{% else %}<span class="badge badge-red">{{ ppe.validation_warnings|length }} warnings</span>{% endif %}</div>
-  <div class="card-body">
-    {% if ppe.validation_warnings %}<div class="alert alert-danger mb-4">{% for w in ppe.validation_warnings %}• {{ w }}<br>{% endfor %}</div>{% endif %}
-    <div style="overflow-x:auto;">
-    <table class="tbl" style="font-size:11px;">
-      <thead><tr><th rowspan="2" style="width:130px">Asset</th>
-        <th colspan="4" style="text-align:center;background:#1a5a3a;color:white">GROSS BLOCK</th>
-        <th colspan="4" style="text-align:center;background:#8b4513;color:white">DEPRECIATION</th>
-        <th style="background:#1a3a6b;color:white">NET</th><th>TB</th></tr>
-        <tr><th class="num">Open</th><th class="num">Add</th><th class="num">Disp</th><th class="num">Close</th>
-        <th class="num">Open</th><th class="num">ForYr</th><th class="num">Disp</th><th class="num">Close</th><th class="num">CY</th><th class="num">Match</th></tr></thead>
+<!-- PPE Schedule -->
+<div id="tab-ppe" class="tab-content" {% if not is_service_company %}style="display:none;"{% endif %}>
+  <div class="card"><div class="card-header"><h3>PPE Schedule (CY + PY combined)</h3>
+    <span class="badge badge-blue">TB values shown for cross-check</span></div>
+    <div class="card-body" style="overflow-x:auto;">
+    <table class="tbl" style="font-size:10px;min-width:900px;">
+      <thead><tr><th rowspan="2">Asset</th><th colspan="4" style="background:var(--green-pale)">Gross Block</th><th colspan="4" style="background:var(--gold-light)">Depreciation</th><th>Net</th><th>TB</th></tr>
+      <tr><th>Opening</th><th>Additions</th><th>Disposals</th><th style="background:var(--green-pale)">Closing</th>
+          <th>Opening</th><th>For Year</th><th>On Disp</th><th style="background:var(--gold-light)">Closing</th>
+          <th style="background:#e8ecf3">Block</th><th>Balance</th></tr></thead>
       <tbody>
-      <tr style="background:var(--navy)"><td colspan="12" style="color:white;font-weight:700">CURRENT YEAR</td></tr>
+      <tr style="background:#3a3a6b"><td colspan="12" style="color:white;font-weight:700">CURRENT YEAR</td></tr>
       {% for grp,items in [('Tangible',ppe.tangible),('Intangible',ppe.intangible)] %}
-      <tr class="section-row"><td colspan="12"><strong>{{ grp }}</strong></td></tr>
+      <tr class="section-row"><td colspan="12">{{ grp }}</td></tr>
       {% for r in items %}<tr><td>{{ r.asset_class }}</td>
         {% for f in ['gross_opening','gross_additions','gross_disposals'] %}<td><input type="number" style="width:70px;font-size:10px;padding:2px;text-align:right" class="form-control" value="{{ r[f] }}" id="ppe_{{ r.id }}_{{ f }}" onchange="queuePPE({{ r.id }})"></td>{% endfor %}
         <td class="num" style="background:#e8f8e0">{{ "{:,.0f}".format(r.gross_closing) }}</td>
@@ -74,58 +82,191 @@
   </div></div>
 </div>
 
+<!-- Related Party — V9 expandable rows + KMP autocomplete + custom txn type -->
 <div id="tab-rp" class="tab-content" style="display:none;">
-  <div class="card mb-4"><div class="card-header"><h3>Related Parties</h3>
-    <button class="btn btn-gold btn-sm" onclick="document.getElementById('rpModal').classList.add('show')">+ Add</button></div>
-  <div id="rpList" class="card-body"><p class="text-muted text-sm">Click tab to load.</p></div></div>
-  <div class="card"><div class="card-header"><h3>Add Transaction</h3></div><div class="card-body">
-    <div class="grid grid-4">
-      <div class="form-group"><label>Party</label><select id="rp_party" class="form-control"><option>Loading...</option></select></div>
-      <div class="form-group"><label>Type</label><select id="rp_type" class="form-control">
-        <option>Purchase of Goods</option><option>Sale of Goods</option><option>Remuneration</option><option>Rent Paid</option>
-        <option>Interest Paid</option><option>Loans Given</option><option>Loans Taken</option><option>Outstanding Receivable</option><option>Outstanding Payable</option></select></div>
-      <div class="form-group"><label>CY</label><input type="number" id="rp_cy" class="form-control" value="0"></div>
-      <div class="form-group"><label>PY</label><input type="number" id="rp_py" class="form-control" value="0"></div>
-    </div><button class="btn btn-primary" onclick="addRPTxn()">Add</button><div id="rpR" class="mt-4"></div>
-  </div></div>
+  <div class="alert alert-info mb-4" style="font-size:12px;">
+    Each party row expands to show / edit / add its transactions inline. Use <strong>Auto-Add KMP</strong> to add directors flagged as KMP on the Client master, or <strong>+ Add Party</strong> to pick from client's directors / shareholders or type a custom name.
+  </div>
+
+  <div class="card mb-4"><div class="card-header">
+    <h3>Related Parties</h3>
+    <div class="flex gap-4">
+      <button class="btn btn-outline btn-sm" onclick="autoAddKMP()" title="Auto-add directors flagged is_kmp=True">⚡ Auto-Add KMP</button>
+      <button class="btn btn-gold btn-sm" onclick="openRPModal()">+ Add Party</button>
+    </div>
+  </div>
+  <div id="rpList" class="card-body"><p class="text-muted text-sm">Loading…</p></div></div>
 </div>
 
+<!-- Ageing — derived from TB (Section 5 V9) -->
 <div id="tab-ageing" class="tab-content" style="display:none;">
-  <div class="card mb-4"><div class="card-header"><h3>TR Ageing Upload</h3></div><div class="card-body">
-    <div class="alert alert-info mb-4">Columns: Party Name, Disputed(Y/N), Doubtful(Y/N), &lt;6M, 6M-1Y, 1-2Y, 2-3Y, &gt;3Y</div>
-    <form onsubmit="uploadAge(event,'TR')"><div class="flex gap-4 items-center">
-      <input type="file" name="file" class="form-control" accept=".xlsx,.csv" required style="width:300px">
-      <select name="period" class="form-control" style="width:80px"><option value="CY">CY</option><option value="PY">PY</option></select>
-      <button type="submit" class="btn btn-primary">Upload</button></div></form><div id="trR" class="mt-4"></div>
+  <div class="alert alert-success mb-4">
+    <strong>Ageing is now derived from your Trial Balance.</strong>
+    Map ledgers to the specific ageing leaf codes (e.g., <span class="code">BS-AS-02-03-04</span> = "TR Undisputed Good 2-3Y") on the
+    <a href="/project/{{ project.id }}/upload">Mapping page</a>.
+    No separate ageing upload needed — the matrix below auto-updates as you map.
+  </div>
+
+  <div class="card mb-4"><div class="card-header">
+    <h3>Trade Receivables Ageing — {{ proj_obj.cy_date_formatted }}</h3>
+    <span class="badge {% if ageing_status.tr_ledgers > 0 %}badge-green{% else %}badge-grey{% endif %}">
+      {{ ageing_status.tr_ledgers }} TR ledger(s) mapped</span>
+  </div><div class="card-body" style="overflow-x:auto;">
+    {% if ageing_status.tr_ledgers == 0 %}
+    <p class="text-muted">No TB ledgers mapped to TR codes (BS-AS-02-03-XX). Go to mapping and assign your "Sundry Debtors" ledgers to specific ageing buckets.</p>
+    {% else %}
+    <table class="tbl" style="font-size:12px;">
+      <thead><tr><th>Category</th><th class="num">&lt;6M</th><th class="num">6M-1Y</th><th class="num">1-2Y</th><th class="num">2-3Y</th><th class="num">&gt;3Y</th><th class="num" style="background:var(--gold-light)">Total</th></tr></thead>
+      <tbody>
+      {% for label, key in [('Undisputed - Good','undisputed_good'),('Undisputed - Doubtful','undisputed_doubtful'),('Disputed - Good','disputed_good'),('Disputed - Doubtful','disputed_doubtful'),('Others','others')] %}
+        <tr>
+          <td>{{ label }}</td>
+          {% for v in tr_matrix.cy[key] %}<td class="num">{{ "{:,.0f}".format(v) if v else '' }}</td>{% endfor %}
+        </tr>
+      {% endfor %}
+        <tr class="fs-total" style="background:var(--gold-light);font-weight:700;">
+          <td>Total</td>
+          {% for v in tr_matrix.cy['total'] %}<td class="num">{{ "{:,.0f}".format(v) }}</td>{% endfor %}
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-sm text-muted mt-4">Grand Total (CY): <strong>{{ "{:,.0f}".format(tr_matrix.cy.grand_total) }}</strong>
+       | (PY): <strong>{{ "{:,.0f}".format(tr_matrix.py.grand_total) }}</strong></p>
+    {% endif %}
   </div></div>
-  <div class="card"><div class="card-header"><h3>TP Ageing Upload</h3></div><div class="card-body">
-    <div class="alert alert-info mb-4">Columns: Party Name, MSME(Y/N), Disputed(Y/N), &lt;1Y, 1-2Y, 2-3Y, &gt;3Y</div>
-    <form onsubmit="uploadAge(event,'TP')"><div class="flex gap-4 items-center">
-      <input type="file" name="file" class="form-control" accept=".xlsx,.csv" required style="width:300px">
-      <select name="period" class="form-control" style="width:80px"><option value="CY">CY</option><option value="PY">PY</option></select>
-      <button type="submit" class="btn btn-primary">Upload</button></div></form><div id="tpR" class="mt-4"></div>
+
+  <div class="card mb-4"><div class="card-header">
+    <h3>Trade Payables Ageing — {{ proj_obj.cy_date_formatted }}</h3>
+    <span class="badge {% if ageing_status.tp_ledgers > 0 %}badge-green{% else %}badge-grey{% endif %}">
+      {{ ageing_status.tp_ledgers }} TP ledger(s) mapped</span>
+  </div><div class="card-body" style="overflow-x:auto;">
+    {% if ageing_status.tp_ledgers == 0 %}
+    <p class="text-muted">No TB ledgers mapped to TP codes (BS-EL-04-02-XX). Go to mapping and assign your "Sundry Creditors" ledgers to specific buckets (MSME/Other, Disputed/Undisputed, ageing).</p>
+    {% else %}
+    <table class="tbl" style="font-size:12px;">
+      <thead><tr><th>Category</th><th class="num">&lt;1Y</th><th class="num">1-2Y</th><th class="num">2-3Y</th><th class="num">&gt;3Y</th><th class="num" style="background:var(--gold-light)">Total</th></tr></thead>
+      <tbody>
+      {% for label, key in [('MSME - Undisputed','msme_undisputed'),('Others - Undisputed','other_undisputed'),('MSME - Disputed','msme_disputed'),('Others - Disputed','other_disputed'),('Unbilled Dues','unbilled')] %}
+        <tr>
+          <td>{{ label }}</td>
+          {% for v in tp_matrix.cy[key] %}<td class="num">{{ "{:,.0f}".format(v) if v else '' }}</td>{% endfor %}
+        </tr>
+      {% endfor %}
+        <tr class="fs-total" style="background:var(--gold-light);font-weight:700;">
+          <td>Total</td>
+          {% for v in tp_matrix.cy['total'] %}<td class="num">{{ "{:,.0f}".format(v) }}</td>{% endfor %}
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-sm text-muted mt-4">Grand Total (CY): <strong>{{ "{:,.0f}".format(tp_matrix.cy.grand_total) }}</strong>
+       | (PY): <strong>{{ "{:,.0f}".format(tp_matrix.py.grand_total) }}</strong></p>
+    {% endif %}
   </div></div>
 </div>
 
+<!-- Ratio PY-1 + Computed Ratios (V9 side-by-side) -->
 <div id="tab-ratio" class="tab-content" style="display:none;">
-  <div class="card"><div class="card-header"><h3>Prior Year Values for Ratio Averages</h3></div><div class="card-body">
-    <div class="alert alert-info mb-4">Enter values as at {{ proj_obj.py_date_formatted }} for average calculations. Only needed for first year.</div>
+
+  <!-- COMPUTED RATIOS TABLE -->
+  <div class="card mb-4"><div class="card-header">
+    <h3>Computed Ratios — CY vs PY</h3>
+    {% if ratios_result.flagged_count > 0 %}
+    <span class="badge" style="background:var(--red-pale);color:var(--red);">{{ ratios_result.flagged_count }} flagged &gt;25%</span>
+    {% else %}
+    <span class="badge badge-green">No variance flags</span>
+    {% endif %}
+  </div><div class="card-body" style="overflow-x:auto;">
+    <div class="alert alert-info mb-4" style="font-size:12px;">
+      Ratios are computed live from your mapped TB. PY-1 values below feed averages where needed (Current Ratio, Debt-Equity, DSCR, ROE, TR/TP/Inventory Turnover). Variances &gt;25% are auto-flagged per Schedule III.
+    </div>
+    {% if ratios_result.ratios %}
+    <table class="tbl" style="font-size:11px;">
+      <thead><tr>
+        <th style="width:24px">#</th><th>Ratio</th>
+        <th class="text-sm">Numerator / Denominator</th>
+        <th class="num">CY</th><th class="num">PY</th>
+        <th class="num">Variance %</th><th>Flag</th>
+      </tr></thead>
+      <tbody>
+      {% for r in ratios_result.ratios %}
+      <tr {% if r.flag %}style="background:var(--red-pale,#fde8e8);"{% endif %}>
+        <td>{{ r.no }}</td>
+        <td><strong>{{ r.name }}</strong></td>
+        <td class="text-muted" style="font-size:10px;">{{ r.numerator }} / {{ r.denominator }}</td>
+        <td class="num">{% if r.cy is not none %}{{ "{:.4f}".format(r.cy) }}{% else %}—{% endif %}</td>
+        <td class="num">{% if r.py is not none %}{{ "{:.4f}".format(r.py) }}{% else %}—{% endif %}</td>
+        <td class="num">{% if r.variance_pct is not none %}{{ "{:+.2%}".format(r.variance_pct) }}{% else %}—{% endif %}</td>
+        <td>{% if r.flag %}<span class="badge" style="background:var(--red-pale);color:var(--red);font-size:10px;">{{ r.flag }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No ratios computed. Make sure TB is uploaded and mapped first.</p>
+    {% endif %}
+  </div></div>
+
+  <!-- PY-1 inputs -->
+  <div class="card"><div class="card-header">
+    <h3>Prior-to-Previous Year (PY-1) Inputs for Averages</h3>
+    <span class="save-ok" id="ratSaved">Saved ✓</span>
+  </div><div class="card-body">
+    <div class="alert alert-info mb-4" style="font-size:12px;">
+      Enter values as at {{ proj_obj.py_date_formatted }} (i.e., the year before PY). Only needed for ratios that use averages. After saving, re-open this tab to see updated computed ratios above.
+    </div>
     <div class="grid grid-3">
       {% for k,l in [('total_equity_py1','Total Equity'),('total_debt_py1','Total Debt'),('total_current_assets_py1','Current Assets'),
         ('total_current_liabilities_py1','Current Liabilities'),('trade_receivables_py1','Trade Receivables'),('trade_payables_py1','Trade Payables'),
         ('inventory_py1','Inventory'),('net_worth_py1','Net Worth'),('capital_employed_py1','Capital Employed')] %}
       <div class="form-group"><label>{{ l }}</label><input type="number" id="r_{{ k }}" class="form-control" value="{{ ratio_py1.get(k,0) }}"></div>
-      {% endfor %}</div>
-    <button class="btn btn-primary" onclick="saveRatio()">Save</button><span class="save-ok" id="ratSaved">Saved ✓</span>
+      {% endfor %}
+    </div>
+    <div class="flex gap-4">
+      <button class="btn btn-primary" onclick="saveRatio()">Save PY-1 Values</button>
+      <button class="btn btn-outline" onclick="location.reload()">↻ Recompute Ratios</button>
+    </div>
   </div></div>
 </div>
 
-<div class="modal-bg" id="rpModal"><div class="modal"><div class="modal-header"><h3>Add Related Party</h3><button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button></div>
-  <form onsubmit="addRP(event)"><div class="modal-body">
-    <div class="form-group"><label>Name</label><input type="text" name="name" class="form-control" required></div>
-    <div class="grid grid-2"><div class="form-group"><label>Category</label><select name="category" class="form-control"><option>KMP</option><option>Relative of KMP</option><option>Entity</option><option>Holding/Sub</option></select></div>
-    <div class="form-group"><label>Relationship</label><input type="text" name="relationship" class="form-control"></div></div>
-  </div><div class="modal-footer"><button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button><button type="submit" class="btn btn-primary">Add</button></div></form></div></div>
+<!-- RP Add Modal (V9) -->
+<div class="modal-bg" id="rpModal">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header"><h3>Add Related Party</h3>
+      <button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button>
+    </div>
+    <form onsubmit="addRP(event)">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Pick from Client Master <span class="text-muted text-sm">(directors + shareholders)</span></label>
+          <select id="rp_kmp_pick" class="form-control" onchange="applyKMPPick()" style="background:var(--gold-light);">
+            <option value="">— Or type a new party below —</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Name *</label><input type="text" name="name" id="rp_name" class="form-control" required></div>
+        <div class="grid grid-2">
+          <div class="form-group"><label>Category *</label>
+            <select name="category" id="rp_category" class="form-control" required>
+              <option value="KMP">KMP</option>
+              <option value="Relative of KMP">Relative of KMP</option>
+              <option value="Entity">Entity in which KMP has interest</option>
+              <option value="Holding/Sub">Holding / Subsidiary</option>
+              <option value="Associate">Associate</option>
+              <option value="Joint Venture">Joint Venture</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Relationship</label>
+            <input type="text" name="relationship" id="rp_relationship" class="form-control" placeholder="e.g. Director, Son of Director">
+          </div>
+        </div>
+        <div class="form-group"><label>PAN / CIN</label><input type="text" name="pan_cin" id="rp_pancin" class="form-control"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Party</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="flex justify-between mt-4">
   <a href="/project/{{ project.id }}/upload" class="btn btn-outline">← Upload & Map</a>
@@ -135,14 +276,14 @@
 
 {% block scripts %}
 <script>
-const PID={{ project.id }};
+const PID={{ project.id }};const CID={{ project.client_id }};
 function showTab(id,el){document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).style.display='block';el.classList.add('active');if(id==='rp')loadRP();}
 
 async function saveCS(t){const cy=parseFloat(document.getElementById('cs_cy_'+t).value)||0,py=parseFloat(document.getElementById('cs_py_'+t).value)||0;
   await fetch('/api/closing-stock/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:PID,stock_type:t,cy_amount:cy,py_amount:py})});
   document.getElementById('csResult').innerHTML='<div class="alert alert-success">Saved</div>';setTimeout(()=>document.getElementById('csResult').innerHTML='',2000);}
 
-// PPE — no page refresh! Batch save.
+// PPE
 const ppeQueue=new Set();
 function queuePPE(id){ppeQueue.add(id);}
 async function saveAllPPE(){
@@ -156,27 +297,226 @@ async function saveAllPPE(){
   ppeQueue.clear();
   const s=document.getElementById('ppeSaved');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),2000);}
 
-async function loadRP(){const r=await fetch('/api/related-parties/'+PID);const d=await r.json();
-  let h='<table class="tbl"><thead><tr><th>Name</th><th>Category</th><th>Relationship</th></tr></thead><tbody>';
-  d.forEach(p=>{h+=`<tr><td><strong>${p.name}</strong></td><td>${p.category}</td><td>${p.relationship}</td></tr>`;});
-  h+='</tbody></table>';document.getElementById('rpList').innerHTML=h;
-  const sel=document.getElementById('rp_party');sel.innerHTML='<option value="">Select...</option>';
-  d.forEach(p=>{sel.innerHTML+=`<option value="${p.id}">${p.name}</option>`;});}
-async function addRP(e){e.preventDefault();const f=e.target;
-  await fetch('/api/related-parties/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:PID,name:f.name.value,category:f.category.value,relationship:f.relationship.value})});
-  document.getElementById('rpModal').classList.remove('show');loadRP();}
-async function addRPTxn(){const p=document.getElementById('rp_party').value;if(!p){alert('Select party');return;}
-  await fetch('/api/rp-transactions/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:PID,party_id:parseInt(p),transaction_type:rp_type.value,cy_amount:parseFloat(rp_cy.value)||0,py_amount:parseFloat(rp_py.value)||0})});
-  document.getElementById('rpR').innerHTML='<div class="alert alert-success">Added</div>';}
+// Related Party — V9 expandable rows + KMP autocomplete + custom txn type
+const TXN_TYPES = [
+  'Purchase of Goods','Sale of Goods','Purchase of Services','Sale of Services',
+  'Remuneration','Sitting Fees','Commission',
+  'Rent Paid','Rent Received','Interest Paid','Interest Received',
+  'Loans Given','Loans Taken','Loans Repaid',
+  'Investment Made','Dividend Paid','Dividend Received',
+  'Guarantee Given','Guarantee Taken',
+  'Outstanding Receivable','Outstanding Payable',
+];
 
+async function loadRP(){
+  const r = await fetch('/api/related-parties/'+PID);
+  const parties = await r.json();
+  if(!parties.length){
+    document.getElementById('rpList').innerHTML = '<p class="text-muted text-sm">No related parties added yet. Use "Auto-Add KMP" or "+ Add Party".</p>';
+    return;
+  }
+  let h = '<table class="tbl" style="width:100%;"><thead><tr><th style="width:24px"></th><th>Name</th><th>Category</th><th>Relationship</th><th class="num">Txns</th><th style="width:80px"></th></tr></thead><tbody>';
+  for(const p of parties){
+    h += `<tr class="rp-head" onclick="toggleParty(${p.id})" style="cursor:pointer;">
+      <td><span id="rp_caret_${p.id}">▶</span></td>
+      <td><strong>${p.name}</strong> ${p.pan_cin?'<span class="text-muted text-sm">'+p.pan_cin+'</span>':''}</td>
+      <td><span class="badge badge-blue">${p.category||''}</span></td>
+      <td class="text-sm">${p.relationship||''}</td>
+      <td class="num" id="rp_txncount_${p.id}">…</td>
+      <td><button class="btn btn-sm btn-danger" onclick="event.stopPropagation();delRP(${p.id})" title="Remove party + all its transactions">×</button></td>
+    </tr>
+    <tr class="rp-body" id="rp_body_${p.id}" style="display:none;background:var(--bg-soft,#fafbfd);">
+      <td></td><td colspan="5"><div id="rp_txn_${p.id}" style="padding:8px 0;"><em class="text-muted text-sm">Click to load…</em></div></td>
+    </tr>`;
+  }
+  h += '</tbody></table>';
+  document.getElementById('rpList').innerHTML = h;
+  // Lazy-load txn count for each party (single round trip — could be batched in future)
+  parties.forEach(p => loadTxnCount(p.id));
+}
+
+async function loadTxnCount(partyId){
+  try {
+    const r = await fetch('/api/rp-transactions/party/'+partyId);
+    const txns = await r.json();
+    const el = document.getElementById('rp_txncount_'+partyId);
+    if(el) el.textContent = txns.length;
+  } catch(e){
+    const el = document.getElementById('rp_txncount_'+partyId);
+    if(el) el.textContent = '0';
+  }
+}
+
+async function toggleParty(partyId){
+  const body = document.getElementById('rp_body_'+partyId);
+  const caret = document.getElementById('rp_caret_'+partyId);
+  if(body.style.display === 'none'){
+    body.style.display = '';
+    caret.textContent = '▼';
+    await loadTxnsForParty(partyId);
+  } else {
+    body.style.display = 'none';
+    caret.textContent = '▶';
+  }
+}
+
+async function loadTxnsForParty(partyId){
+  const r = await fetch('/api/rp-transactions/party/'+partyId);
+  const txns = await r.json();
+  const container = document.getElementById('rp_txn_'+partyId);
+  let h = '<table class="tbl" style="font-size:12px;margin-bottom:8px;"><thead><tr><th>Transaction Type</th><th class="num">CY Amount</th><th class="num">PY Amount</th><th style="width:50px"></th></tr></thead><tbody>';
+  if(txns.length===0){
+    h += '<tr><td colspan="4" class="text-muted text-sm">No transactions yet. Add one below.</td></tr>';
+  } else {
+    for(const t of txns){
+      h += `<tr id="txnrow_${t.id}">
+        <td>${t.transaction_type}</td>
+        <td class="num"><input type="number" value="${t.cy_amount||0}" class="form-control" style="font-size:11px;padding:2px 6px;text-align:right;width:120px;" onchange="updateTxn(${t.id},'cy_amount',this.value,${partyId})"></td>
+        <td class="num"><input type="number" value="${t.py_amount||0}" class="form-control" style="font-size:11px;padding:2px 6px;text-align:right;width:120px;" onchange="updateTxn(${t.id},'py_amount',this.value,${partyId})"></td>
+        <td><button class="btn btn-sm btn-danger" onclick="delTxn(${t.id},${partyId})">×</button></td>
+      </tr>`;
+    }
+  }
+  h += '</tbody></table>';
+  // Add-transaction sub-form
+  let typeOptions = '';
+  TXN_TYPES.forEach(tt => { typeOptions += `<option value="${tt}">${tt}</option>`; });
+  typeOptions += '<option value="_custom">— Custom —</option>';
+  h += `<div class="flex gap-4 items-center" style="background:var(--bg);padding:8px;border-radius:6px;">
+    <strong style="font-size:12px;">Add transaction:</strong>
+    <select id="newtxn_type_${partyId}" class="form-control" style="width:200px;font-size:11px;" onchange="toggleCustomType(${partyId})">
+      ${typeOptions}
+    </select>
+    <input type="text" id="newtxn_custom_${partyId}" class="form-control" style="display:none;width:160px;font-size:11px;" placeholder="Custom type...">
+    <input type="number" id="newtxn_cy_${partyId}" class="form-control" placeholder="CY" style="width:110px;font-size:11px;">
+    <input type="number" id="newtxn_py_${partyId}" class="form-control" placeholder="PY" style="width:110px;font-size:11px;">
+    <button class="btn btn-sm btn-primary" onclick="addTxnForParty(${partyId})">+ Add</button>
+  </div>`;
+  container.innerHTML = h;
+}
+
+function toggleCustomType(partyId){
+  const sel = document.getElementById('newtxn_type_'+partyId);
+  const custom = document.getElementById('newtxn_custom_'+partyId);
+  if(sel.value === '_custom'){ custom.style.display='inline-block'; custom.focus(); }
+  else { custom.style.display='none'; }
+}
+
+async function addTxnForParty(partyId){
+  let txnType = document.getElementById('newtxn_type_'+partyId).value;
+  if(txnType === '_custom'){
+    txnType = document.getElementById('newtxn_custom_'+partyId).value.trim();
+    if(!txnType){ alert('Enter custom transaction type'); return; }
+  }
+  const cy = parseFloat(document.getElementById('newtxn_cy_'+partyId).value) || 0;
+  const py = parseFloat(document.getElementById('newtxn_py_'+partyId).value) || 0;
+  if(cy === 0 && py === 0){ if(!confirm('Add zero-amount transaction?')) return; }
+  await fetch('/api/rp-transactions/',{method:'POST',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({project_id:PID, party_id:partyId, transaction_type:txnType, cy_amount:cy, py_amount:py})});
+  await loadTxnsForParty(partyId);
+  await loadTxnCount(partyId);
+}
+
+async function updateTxn(txnId, field, value, partyId){
+  const body = {};
+  body[field] = parseFloat(value) || 0;
+  await fetch('/api/rp-transactions/'+txnId, {method:'PUT',headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+}
+
+async function delTxn(txnId, partyId){
+  if(!confirm('Delete this transaction?')) return;
+  await fetch('/api/rp-transactions/'+txnId, {method:'DELETE'});
+  await loadTxnsForParty(partyId);
+  await loadTxnCount(partyId);
+}
+
+async function openRPModal(){
+  document.getElementById('rpModal').classList.add('show');
+  // Reset form
+  document.getElementById('rp_kmp_pick').value = '';
+  document.getElementById('rp_name').value = '';
+  document.getElementById('rp_relationship').value = '';
+  document.getElementById('rp_pancin').value = '';
+  document.getElementById('rp_category').value = 'KMP';
+  // Load KMP/director candidates from client master
+  const sel = document.getElementById('rp_kmp_pick');
+  sel.innerHTML = '<option value="">— Or type a new party below —</option><option disabled>Loading…</option>';
+  try {
+    const r = await fetch('/api/rp/kmp-candidates/'+PID);
+    const cands = await r.json();
+    sel.innerHTML = '<option value="">— Or type a new party below —</option>';
+    if(cands.length === 0){
+      sel.innerHTML += '<option disabled>(no directors/shareholders on client)</option>';
+    } else {
+      cands.forEach((c, idx) => {
+        const label = c.name + (c.din_pan ? ' ('+c.din_pan+')' : '') + ' — ' + c.designation + (c.is_kmp ? ' [KMP]' : '');
+        const data = JSON.stringify(c).replace(/"/g,'&quot;');
+        sel.innerHTML += `<option value="${idx}" data-cand="${data}">${label}</option>`;
+      });
+    }
+  } catch(e){
+    sel.innerHTML = '<option value="">— Or type a new party below —</option>';
+  }
+}
+
+function applyKMPPick(){
+  const sel = document.getElementById('rp_kmp_pick');
+  const opt = sel.options[sel.selectedIndex];
+  if(!opt || !opt.dataset.cand) return;
+  try {
+    const c = JSON.parse(opt.dataset.cand.replace(/&quot;/g,'"'));
+    document.getElementById('rp_name').value = c.name;
+    document.getElementById('rp_pancin').value = c.din_pan || '';
+    document.getElementById('rp_relationship').value = c.designation || '';
+    document.getElementById('rp_category').value = c.suggested_category || 'KMP';
+  } catch(e){}
+}
+
+async function addRP(e){
+  e.preventDefault();
+  const payload = {
+    project_id: PID,
+    name: document.getElementById('rp_name').value,
+    category: document.getElementById('rp_category').value,
+    relationship: document.getElementById('rp_relationship').value,
+    pan_cin: document.getElementById('rp_pancin').value,
+  };
+  await fetch('/api/related-parties/', {method:'POST',headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  document.getElementById('rpModal').classList.remove('show');
+  loadRP();
+}
+
+async function delRP(id){
+  if(!confirm('Remove this party and ALL its transactions?')) return;
+  await fetch('/api/related-parties/'+id, {method:'DELETE'});
+  loadRP();
+}
+
+async function autoAddKMP(){
+  const r = await fetch('/api/rp/auto-kmp/'+PID, {method:'POST'});
+  const j = await r.json();
+  loadRP();
+  // Brief toast
+  const toast = document.createElement('div');
+  toast.className = 'alert alert-success';
+  toast.style.cssText = 'position:fixed;top:80px;right:20px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+  toast.textContent = 'Added '+(j.added||0)+' KMP as related parties';
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(), 3000);
+}
+
+// Ageing
 async function uploadAge(e,t){e.preventDefault();const fd=new FormData(e.target);fd.append('ageing_type',t);fd.append('replace','true');
   const r=await fetch('/api/ageing/'+PID+'/upload',{method:'POST',body:fd});const j=await r.json();
   document.getElementById((t==='TR'?'tr':'tp')+'R').innerHTML=r.ok?'<div class="alert alert-success">'+j.rows_imported+' rows</div>':'<div class="alert alert-danger">Error</div>';}
 
-async function saveRatio(){const d={project_id:PID};
-  ['total_equity_py1','total_debt_py1','total_current_assets_py1','total_current_liabilities_py1','trade_receivables_py1','trade_payables_py1','inventory_py1','net_worth_py1','capital_employed_py1'
-  ].forEach(k=>{d[k]=parseFloat(document.getElementById('r_'+k).value)||0;});
-  await fetch('/api/ratio-py1/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+// Ratio PY-1
+async function saveRatio(){
+  const body={project_id:PID};
+  ['total_equity_py1','total_debt_py1','total_current_assets_py1','total_current_liabilities_py1',
+   'trade_receivables_py1','trade_payables_py1','inventory_py1','net_worth_py1','capital_employed_py1'
+  ].forEach(k=>{body[k]=parseFloat(document.getElementById('r_'+k).value)||0;});
+  await fetch('/api/ratio-py1/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const s=document.getElementById('ratSaved');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),2000);}
 </script>
 {% endblock %}

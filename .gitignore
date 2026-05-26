@@ -1,35 +1,18 @@
-# Python
-__pycache__/
+﻿__pycache__/
 *.pyc
 *.pyo
-*.egg-info/
-dist/
-build/
-*.egg
-
-# Virtual environment
-venv/
-env/
-.venv/
-
-# Database (auto-generated on first run)
-data/tce.db
 data/*.db
-
-# Generated output files
-output/*.xlsx
-output/*.pdf
-output/*.docx
-
-# IDE
+data/*.db-journal
+output/*
+!output/.gitkeep
+.env
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS
+*.log
 .DS_Store
 Thumbs.db
-
-# Environment variables
-.env
+node_modules/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
