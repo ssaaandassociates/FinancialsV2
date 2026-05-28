@@ -11,6 +11,9 @@ class Client(Base):
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    # Multi-tenant scope. Nullable so existing single-tenant data still loads;
+    # in production every client is created with a firm_id. All queries filter by it.
+    firm_id = Column(Integer, ForeignKey("firms.id"), nullable=True, index=True)
     name = Column(String(200), nullable=False)
     cin = Column(String(25))
     pan = Column(String(15))

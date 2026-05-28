@@ -8,3 +8,4 @@ jinja2
 aiofiles
 reportlab
 python-docx
+psycopg2-binary
