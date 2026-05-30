@@ -31,3 +31,12 @@
 - Auth wiring (Supabase Auth → User records)
 - firm_id scoping enforced on all client/project queries
 - Next.js frontend
+
+## UPDATE — Railway + Supabase connection (IMPORTANT)
+Railway cannot route IPv6, but Supabase's DIRECT connection (port 5432) is IPv6-only.
+=> Use the Supabase POOLER connection string instead:
+   - Supabase → Settings → Database → Connection string → "Connection pooling"
+   - Mode: SESSION
+   - Format: postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+database.py auto-detects "pooler.supabase.com" and uses NullPool (lets pgbouncer pool),
+which avoids "prepared statement already exists" errors.

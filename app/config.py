@@ -27,3 +27,13 @@ IS_SQLITE = DATABASE_URL.startswith("sqlite")
 
 # Access code for the simple login gate (overridable via env in production)
 ACCESS_CODE = os.getenv("ACCESS_CODE", "ssaa2025")
+
+# --- Supabase Auth (SaaS migration) ---
+# Project URL, e.g. https://<ref>.supabase.co
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+# Legacy JWT secret (HS256). Used to verify Supabase session tokens.
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip()
+# When True, endpoints require a valid Supabase token. When False (no secret set),
+# the app runs in legacy single-tenant mode using the ACCESS_CODE gate — so local
+# dev and the current deploy keep working until auth is fully wired on the frontend.
+AUTH_ENABLED = bool(SUPABASE_JWT_SECRET)

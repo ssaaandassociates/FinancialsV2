@@ -7,18 +7,23 @@ from sqlalchemy.orm import Session
 from app.models import Client, Project
 
 
-def create_client(db: Session, name: str, **kwargs) -> Client:
-    """Create a new client."""
-    client = Client(name=name, **kwargs)
+def create_client(db: Session, name: str, firm_id: int = None, **kwargs) -> Client:
+    """Create a new client, scoped to a firm when multi-tenant."""
+    # Drop firm_id from kwargs if a caller accidentally passed it both ways
+    kwargs.pop("firm_id", None)
+    client = Client(name=name, firm_id=firm_id, **kwargs)
     db.add(client)
     db.commit()
     db.refresh(client)
     return client
 
 
-def list_clients(db: Session) -> list[dict]:
-    """List all clients with project counts."""
-    clients = db.query(Client).all()
+def list_clients(db: Session, firm_id: int = None) -> list[dict]:
+    """List clients with project counts. When firm_id is given, only that firm's."""
+    q = db.query(Client)
+    if firm_id is not None:
+        q = q.filter(Client.firm_id == firm_id)
+    clients = q.all()
     return [
         {
             "id": c.id,
@@ -31,9 +36,12 @@ def list_clients(db: Session) -> list[dict]:
     ]
 
 
-def get_client(db: Session, client_id: int) -> dict:
-    """Get full client details."""
-    c = db.query(Client).filter(Client.id == client_id).first()
+def get_client(db: Session, client_id: int, firm_id: int = None) -> dict:
+    """Get full client details. When firm_id is given, enforce ownership."""
+    q = db.query(Client).filter(Client.id == client_id)
+    if firm_id is not None:
+        q = q.filter(Client.firm_id == firm_id)
+    c = q.first()
     if not c:
         raise ValueError(f"Client {client_id} not found")
     return {

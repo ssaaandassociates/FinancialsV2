@@ -85,8 +85,17 @@ def logout():
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
-        if any(path.startswith(s) for s in ["/login", "/static", "/docs", "/openapi.json", "/favicon"]):
+        if any(path.startswith(s) for s in ["/login", "/static", "/docs", "/openapi.json", "/favicon", "/health"]):
             return await call_next(request)
+        # When Supabase auth is enabled, an Authorization: Bearer token on an
+        # /api request is a valid alternative to the legacy cookie. The per-route
+        # get_current_firm_id dependency does the real verification + scoping;
+        # here we just let it through so that dependency can run.
+        from app.config import AUTH_ENABLED
+        if AUTH_ENABLED and path.startswith("/api"):
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                return await call_next(request)
         if not _check_auth(request):
             return JSONResponse({"detail": "Unauthorized"}, 401) if path.startswith("/api") else RedirectResponse("/login")
         return await call_next(request)
@@ -115,14 +124,29 @@ def _project_context(db, project_id):
             coa.append(f)
         coa.sort(key=lambda c: c.code)
 
-    major = {c.code: c.particulars for c in coa if c.level in (2, 3)}
+    # Build major dropdown = codes that are PARENTS of something (i.e. have children).
+    # Avoids the prior bug where level-based logic missed PL-01-style parents whose
+    # children are L3 leaves.
+    parents_used = {c.parent_code for c in coa if c.parent_code}
+    major = {c.code: c.particulars for c in coa if c.code in parents_used}
+
+    # Build sub→major map directly from parent_code. Walk up the tree if the
+    # immediate parent isn't itself in `major` (handles 3-level chains).
+    code_by = {c.code: c for c in coa}
     s2m = {}
-    sm = sorted(major.keys(), key=len, reverse=True)
     for c in coa:
-        if c.level > 3:
-            for m in sm:
-                if c.code.startswith(m):
-                    s2m[c.code] = m; break
+        if c.code in major:
+            continue  # it's a parent itself, not a sub
+        p = c.parent_code
+        # Walk up until we find a code that's in the major set
+        seen = 0
+        while p and p not in major and seen < 6:
+            parent_obj = code_by.get(p)
+            p = parent_obj.parent_code if parent_obj else None
+            seen += 1
+        if p:
+            s2m[c.code] = p
+        # Codes with no traceable major parent get omitted from the sub dropdown.
     sb = db.query(SigningBlock).filter(SigningBlock.project_id == project_id).first()
     signing = {}
     if sb:

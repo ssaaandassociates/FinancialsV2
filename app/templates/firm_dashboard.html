@@ -25,16 +25,32 @@
 {% if clients %}
 <div class="client-grid" id="clientGrid">
   {% for c in clients %}
-  <a href="/client/{{ c.id }}" class="client-card" data-name="{{ c.name|lower }}">
-    <h3>{{ c.name }}</h3>
-    <div class="meta">{{ c.cin or 'CIN not set' }} {% if c.pan %}· {{ c.pan }}{% endif %}</div>
-    <div class="stats">
-      <span>{{ c.project_count }} project{{ 's' if c.project_count != 1 }}</span>
-      {% if c.principal_activity %}<span>· {{ c.principal_activity[:30] }}</span>{% endif %}
-    </div>
-  </a>
+  <div class="client-card-wrap" style="position:relative;">
+    <a href="/client/{{ c.id }}" class="client-card" data-name="{{ c.name|lower }}" style="display:block;">
+      <h3>{{ c.name }}</h3>
+      <div class="meta">{{ c.cin or 'CIN not set' }} {% if c.pan %}· {{ c.pan }}{% endif %}</div>
+      <div class="stats">
+        <span>{{ c.project_count }} project{{ 's' if c.project_count != 1 }}</span>
+        {% if c.principal_activity %}<span>· {{ c.principal_activity[:30] }}</span>{% endif %}
+      </div>
+    </a>
+    <button class="btn-del-client" title="Delete client"
+            onclick="askDeleteClient(event, {{ c.id }}, {{ c.name|tojson }}, {{ c.project_count }})">🗑</button>
+  </div>
   {% endfor %}
 </div>
+<style>
+  .client-card-wrap .btn-del-client {
+    position: absolute; top: 10px; right: 10px;
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid var(--line, #E6E8EE); background: #fff;
+    cursor: pointer; opacity: 0; transition: opacity 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: var(--text-muted, #6B7280);
+  }
+  .client-card-wrap:hover .btn-del-client { opacity: 1; }
+  .client-card-wrap .btn-del-client:hover { background: #FEE2E2; color: #B91C1C; border-color: #B91C1C; }
+</style>
 {% else %}
 <div class="empty-state">
   <p style="font-size:18px;margin-bottom:8px;">No clients yet</p>
@@ -82,8 +98,70 @@ async function restoreDB(e){e.preventDefault();
   const r=await fetch('/api/db/restore',{method:'POST',body:fd});const j=await r.json();
   if(r.ok){alert('Database restored ('+j.size_bytes+' bytes). Page will reload.');location.reload();}
   else alert('Error: '+(j.detail||JSON.stringify(j)));}
+
+/* === Delete client with name-confirmation safety === */
+let _delClientId=null, _delClientName='';
+function askDeleteClient(e, id, name, projectCount){
+  e.preventDefault(); e.stopPropagation();
+  _delClientId=id; _delClientName=name;
+  document.getElementById('delClientName').textContent=name;
+  document.getElementById('delClientProjects').textContent=projectCount;
+  document.getElementById('delClientInput').value='';
+  document.getElementById('delClientBtn').disabled=true;
+  document.getElementById('delClientModal').classList.add('show');
+  setTimeout(()=>document.getElementById('delClientInput').focus(),50);
+  return false;
+}
+function onDelClientType(v){
+  document.getElementById('delClientBtn').disabled = v.trim() !== _delClientName.trim();
+}
+async function confirmDeleteClient(){
+  const typed=document.getElementById('delClientInput').value.trim();
+  if(typed !== _delClientName.trim()){return;}
+  const r=await fetch('/api/clients/'+_delClientId,{
+    method:'DELETE',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({confirm_name: typed})
+  });
+  if(r.ok){
+    document.getElementById('delClientModal').classList.remove('show');
+    location.reload();
+  } else {
+    const j=await r.json().catch(()=>({detail:'Unknown error'}));
+    alert('Could not delete: '+(j.detail||JSON.stringify(j)));
+  }
+}
 </script>
 {% endblock %}
+
+<!-- Delete Client Modal -->
+<div class="modal-bg" id="delClientModal"><div class="modal" style="max-width:520px;">
+  <div class="modal-header">
+    <h3 style="color:var(--red,#B91C1C);">⚠ Delete Client</h3>
+    <button class="btn btn-sm" onclick="this.closest('.modal-bg').classList.remove('show')">×</button>
+  </div>
+  <div class="modal-body">
+    <div class="alert alert-danger mb-4" style="font-size:13px;">
+      You are about to permanently delete <strong id="delClientName"></strong> and
+      <strong><span id="delClientProjects"></span> project(s)</strong> including all
+      trial balance data, mappings, audit entries, and supplementary records.
+      <br><br><strong>This cannot be undone.</strong>
+    </div>
+    <div class="form-group">
+      <label>To confirm, type the client name exactly as shown above:</label>
+      <input type="text" id="delClientInput" class="form-control"
+             placeholder="Type client name to confirm"
+             oninput="onDelClientType(this.value)"
+             autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline" onclick="this.closest('.modal-bg').classList.remove('show')">Cancel</button>
+    <button type="button" id="delClientBtn" class="btn btn-danger" disabled onclick="confirmDeleteClient()">
+      Permanently delete client
+    </button>
+  </div>
+</div></div>
 
 <!-- H8: Restore Modal -->
 <div class="modal-bg" id="restoreModal"><div class="modal">

@@ -1,11 +1,14 @@
 """Projects & Clients API routes"""
 import os
 from datetime import date
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services import project_service
+from app.auth import get_current_firm_id
+from app.models.client import Client
 
 router = APIRouter()
 
@@ -68,34 +71,83 @@ class ProjectCreate(BaseModel):
 
 # ----- CLIENT ROUTES -----
 @router.post("/clients/")
-def create_client(payload: ClientCreate, db: Session = Depends(get_db)):
+def create_client(payload: ClientCreate, db: Session = Depends(get_db),
+                  firm_id: Optional[int] = Depends(get_current_firm_id)):
     try:
-        c = project_service.create_client(db, **payload.model_dump(exclude_none=True))
+        c = project_service.create_client(db, firm_id=firm_id, **payload.model_dump(exclude_none=True))
         return {"id": c.id, "name": c.name, "status": "created"}
     except Exception as e:
         raise HTTPException(400, str(e))
 
 
 @router.get("/clients/")
-def list_clients(db: Session = Depends(get_db)):
-    return project_service.list_clients(db)
+def list_clients(db: Session = Depends(get_db),
+                 firm_id: Optional[int] = Depends(get_current_firm_id)):
+    return project_service.list_clients(db, firm_id=firm_id)
 
 
 @router.get("/clients/{client_id}")
-def get_client(client_id: int, db: Session = Depends(get_db)):
+def get_client(client_id: int, db: Session = Depends(get_db),
+               firm_id: Optional[int] = Depends(get_current_firm_id)):
     try:
-        return project_service.get_client(db, client_id)
+        return project_service.get_client(db, client_id, firm_id=firm_id)
     except ValueError as e:
         raise HTTPException(404, str(e))
 
 
 @router.put("/clients/{client_id}")
-def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(get_db)):
+def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(get_db),
+                  firm_id: Optional[int] = Depends(get_current_firm_id)):
     try:
+        # Ownership check when multi-tenant
+        if firm_id is not None:
+            owned = db.query(Client).filter(Client.id == client_id, Client.firm_id == firm_id).first()
+            if not owned:
+                raise HTTPException(404, "Client not found")
         c = project_service.update_client(db, client_id, **payload.model_dump(exclude_none=True))
         return {"id": c.id, "name": c.name, "status": "updated"}
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+class ClientDeleteConfirm(BaseModel):
+    confirm_name: str  # Must match client.name exactly to authorise deletion
+
+
+@router.delete("/clients/{client_id}")
+def delete_client(
+    client_id: int,
+    payload: ClientDeleteConfirm,
+    db: Session = Depends(get_db),
+    firm_id: Optional[int] = Depends(get_current_firm_id),
+):
+    """
+    Delete a client and ALL its cascading data (projects, TB, audit, etc.).
+    Requires the caller to retype the client's exact name as a safety check —
+    prevents accidental deletes via misclicks or stray scripts.
+    """
+    q = db.query(Client).filter(Client.id == client_id)
+    if firm_id is not None:
+        q = q.filter(Client.firm_id == firm_id)
+    c = q.first()
+    if not c:
+        raise HTTPException(404, "Client not found")
+
+    # Hard requirement: typed name must match exactly (case-sensitive, trimmed)
+    if (payload.confirm_name or "").strip() != (c.name or "").strip():
+        raise HTTPException(
+            400,
+            f"Confirmation name does not match. Type the client name exactly as: \"{c.name}\".",
+        )
+
+    project_count = len(c.projects)
+    db.delete(c)  # cascades to projects, directors, shareholders, custom CoA, policies
+    db.commit()
+    return {
+        "status": "deleted",
+        "client_id": client_id,
+        "projects_deleted": project_count,
+    }
 
 
 # ----- PROJECT ROUTES -----
