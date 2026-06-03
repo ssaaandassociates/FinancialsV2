@@ -39,10 +39,11 @@ export async function apiPut<T = any>(path: string, body?: any): Promise<T> {
   return res.json();
 }
 
-export async function apiDelete<T = any>(path: string): Promise<T> {
+export async function apiDelete<T = any>(path: string, body?: any): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method: "DELETE",
     headers: await authHeaders(),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new ApiError(res.status, await safeText(res));
   return res.json();
