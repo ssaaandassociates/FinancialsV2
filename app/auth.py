@@ -1,25 +1,17 @@
 """
 Authentication & tenancy — SaaS migration (Slice 0b).
 
-Flow:
-  1. Frontend logs in via Supabase Auth, receives a JWT (access token).
-  2. Frontend sends it as `Authorization: Bearer <token>` on every API call.
-  3. verify_token() decodes & validates the JWT using the Supabase Legacy JWT secret.
-  4. get_current_user() resolves (or auto-creates) the local User row + their Firm.
-  5. get_current_firm_id() returns the firm_id used to scope every data query.
-
-Safety design:
-  - If AUTH_ENABLED is False (no SUPABASE_JWT_SECRET set), the app stays in legacy
-    single-tenant mode: get_current_firm_id() returns None and queries are unscoped,
-    exactly like before. This lets the current deploy keep working until the secret
-    is set and the frontend sends tokens. Zero breakage during rollout.
+Detects the JWT algorithm from the token header and verifies accordingly:
+  - ES256/RS256 -> fetch the public key from the project's JWKS endpoint.
+  - HS256        -> verify with the Legacy JWT secret (SUPABASE_JWT_SECRET).
 """
 from typing import Optional
 from fastapi import Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 import jwt
+from jwt import PyJWKClient
 
-from app.config import SUPABASE_JWT_SECRET, AUTH_ENABLED
+from app.config import SUPABASE_JWT_SECRET, SUPABASE_URL, AUTH_ENABLED
 from app.database import get_db
 from app.models.tenancy import Firm, User
 
@@ -38,35 +30,62 @@ def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
     return None
 
 
+_jwks_client: Optional[PyJWKClient] = None
+
+
+def _get_jwks_client() -> PyJWKClient:
+    global _jwks_client
+    if _jwks_client is None:
+        if not SUPABASE_URL:
+            raise AuthError("SUPABASE_URL not configured for asymmetric token verification.")
+        jwks_url = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+        _jwks_client = PyJWKClient(jwks_url)
+    return _jwks_client
+
+
 def verify_token(token: str) -> dict:
     """
-    Verify a Supabase JWT (HS256 legacy secret) and return its claims.
-    Supabase tokens carry: sub (user uuid), email, aud='authenticated', exp, etc.
+    Verify a Supabase JWT and return its claims, handling both the new
+    asymmetric (ES256/RS256) tokens and legacy symmetric (HS256) tokens.
     """
     try:
-        claims = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256", "ES256", "RS256"],
-            audience="authenticated",
-            options={"verify_aud": True},
-        )
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg", "")
+
+        if alg in ("ES256", "RS256"):
+            signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
+            claims = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["ES256", "RS256"],
+                audience="authenticated",
+                options={"verify_aud": True},
+            )
+        else:
+            if not SUPABASE_JWT_SECRET:
+                raise AuthError("Server missing SUPABASE_JWT_SECRET for HS256 verification.")
+            claims = jwt.decode(
+                token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                audience="authenticated",
+                options={"verify_aud": True},
+            )
         return claims
     except jwt.ExpiredSignatureError:
         raise AuthError("Token expired — please log in again.")
     except jwt.InvalidTokenError as e:
         raise AuthError(f"Invalid token: {e}")
+    except AuthError:
+        raise
+    except Exception as e:
+        raise AuthError(f"Token verification failed: {e}")
 
 
 def get_current_user(
     authorization: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
-    """
-    Resolve the logged-in user from the Supabase token.
-    Auto-provisions a User + a personal Firm on first login.
-    Returns None when AUTH_ENABLED is False (legacy mode).
-    """
     if not AUTH_ENABLED:
         return None
 
@@ -82,19 +101,17 @@ def get_current_user(
 
     user = db.query(User).filter(User.id == uid).first()
     if user is None:
-        # First login → create user + a personal firm (one firm per user)
         firm = Firm(
             name=(email.split("@")[0] if email else "My Firm"),
             primary_email=email,
         )
         db.add(firm)
-        db.flush()  # get firm.id
+        db.flush()
         user = User(id=uid, email=email or f"{uid}@unknown", firm_id=firm.id)
         db.add(user)
         db.commit()
         db.refresh(user)
     else:
-        # Existing user with no firm (edge case) → attach one
         if user.firm_id is None:
             firm = Firm(name=(email.split("@")[0] if email else "My Firm"),
                         primary_email=email)
@@ -110,10 +127,6 @@ def get_current_user(
 def get_current_firm_id(
     user: Optional[User] = Depends(get_current_user),
 ) -> Optional[int]:
-    """
-    The firm_id used to scope all data queries.
-    Returns None in legacy mode (AUTH_ENABLED False) → queries stay unscoped.
-    """
     if not AUTH_ENABLED:
         return None
     if user is None or user.firm_id is None:
