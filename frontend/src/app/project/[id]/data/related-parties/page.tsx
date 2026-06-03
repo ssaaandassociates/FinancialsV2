@@ -33,7 +33,7 @@ export default function RPPage() {
     try {
       setErr("");
       const list = await rpApi.listParties(pid);
-      setParties(list);
+      setParties(Array.isArray(list) ? list : []);
     } catch (e: any) { setErr(e?.message || "Failed to load"); setParties([]); }
   }
   useEffect(() => { if (session) reload(); }, [session, pid]);
@@ -41,7 +41,7 @@ export default function RPPage() {
   async function loadTxns(partyId: number) {
     try {
       const t = await rpApi.txnsForParty(partyId);
-      setTxnsByParty((prev) => ({ ...prev, [partyId]: t }));
+      setTxnsByParty((prev) => ({ ...prev, [partyId]: Array.isArray(t) ? t : [] }));
     } catch (e: any) { setErr(e?.message || "Failed to load txns"); }
   }
 
@@ -62,7 +62,7 @@ export default function RPPage() {
 
   async function openAdd() {
     setShowAdd(true);
-    try { const k = await rpApi.kmpCandidates(pid); setKmpOpts(k); } catch {}
+    try { const k = await rpApi.kmpCandidates(pid); setKmpOpts(Array.isArray(k) ? k : []); } catch {}
   }
 
   if (loading || !session) return null;

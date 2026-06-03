@@ -56,7 +56,7 @@ export function DirectorsTab({ clientId, onChanged }: { clientId: number; onChan
   const [editDraft, setEditDraft] = useState<Partial<Director>>({});
 
   async function reload() {
-    try { setErr(""); setRows(await directorsApi.list(clientId)); }
+    try { setErr(""); { const _d = await directorsApi.list(clientId); setRows(Array.isArray(_d) ? _d : []); } }
     catch (e: any) { setErr(e?.message || "Failed to load directors"); setRows([]); }
   }
   useEffect(() => { reload(); }, [clientId]);

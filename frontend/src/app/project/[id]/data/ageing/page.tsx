@@ -27,9 +27,9 @@ export default function AgeingPage() {
 
   const Matrix = ({ title, data, year }: { title: string; data: AgeingMatrix | null; year: "cy" | "py" }) => {
     if (!data) return <Card><CardBody><Empty icon={<Clock className="h-6 w-6" />} title={`No ${title} data`} hint="Map TB ledgers to BS-AS-02-03 (TR) or BS-EL-04-02 (TP) leaf codes." /></CardBody></Card>;
-    const matrix = data[year];
-    const buckets = data.buckets || [];
-    const categories = data.categories || Object.keys(matrix.rows || {});
+    const matrix = data[year] || { rows: {} };
+    const buckets = Array.isArray(data.buckets) ? data.buckets : [];
+    const categories = Array.isArray(data.categories) ? data.categories : Object.keys(matrix.rows || {});
     return (
       <Card>
         <CardHeader><h3 className="font-medium text-navy">{title} — {year === "cy" ? "Current year" : "Previous year"}</h3></CardHeader>

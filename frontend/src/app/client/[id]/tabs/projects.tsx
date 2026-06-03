@@ -31,7 +31,7 @@ export function ProjectsTab({ clientId, onChanged }: { clientId: number; onChang
     try {
       setErr("");
       const data = await projectsApi.list(clientId);
-      setRows(data);
+      setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setErr(e?.message || "Failed to load projects");
       setRows([]);

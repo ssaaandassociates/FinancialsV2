@@ -39,6 +39,34 @@ export async function bearerHeaders(): Promise<HeadersInit> {
   return headers;
 }
 
+/**
+ * Download a file from the backend WITH the auth header attached, then trigger
+ * a browser "Save as". Plain <a href> links can't send the Bearer token, so a
+ * protected endpoint would 401 — this fetches the blob authenticated instead.
+ * `path` starts with "/" and excludes the "/api" prefix.
+ */
+export async function downloadFile(path: string, filename?: string): Promise<void> {
+  const headers = await bearerHeaders();
+  const res = await fetch(url(path), { headers });
+  if (!res.ok) throw new ApiError(res.status, await safeText(res));
+  const blob = await res.blob();
+  // Try to read filename from Content-Disposition, else use provided/fallback.
+  let name = filename || "download.xlsx";
+  const cd = res.headers.get("content-disposition");
+  if (cd) {
+    const m = cd.match(/filename="?([^"]+)"?/);
+    if (m) name = m[1];
+  }
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objUrl;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objUrl);
+}
+
 export async function apiGet<T = any>(path: string): Promise<T> {
   const res = await fetch(url(path), { headers: await authHeaders() });
   if (!res.ok) throw new ApiError(res.status, await safeText(res));

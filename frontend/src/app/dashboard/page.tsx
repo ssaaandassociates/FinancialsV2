@@ -28,7 +28,7 @@ export default function DashboardPage() {
     try {
       setErr("");
       const data = await apiGet<ClientRow[]>("/clients/");
-      setClients(data);
+      setClients(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setErr(e instanceof ApiError ? `Failed to load clients (${e.status})` : "Failed to load clients");
       setClients([]);

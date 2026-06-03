@@ -8,7 +8,8 @@ import { Tabs, TabPanel } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, FileSpreadsheet, Trash2, Upload } from "lucide-react";
-import { clientApi, directorsApi, shareholdersApi, policiesApi, customCoAApi, projectsApi, templatesUrls, importMasterData, type ClientFull, type MasterImportResult } from "@/lib/client-api";
+import { clientApi, directorsApi, shareholdersApi, policiesApi, customCoAApi, projectsApi, templatePaths, importMasterData, type ClientFull, type MasterImportResult } from "@/lib/client-api";
+import { downloadFile } from "@/lib/api";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { FileDrop } from "@/components/ui/file-upload";
@@ -171,12 +172,12 @@ export default function ClientPage() {
             <Button variant="outline" size="md" onClick={() => { setImportOpen(true); setImportFile(null); setImportResult(null); setImportErr(""); }}>
               <Upload className="h-4 w-4" /> Import master data
             </Button>
-            <a href={templatesUrls.current(client.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
+            <button onClick={() => downloadFile(templatePaths.current(client.id)).catch((e) => alert("Download failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
               <Download className="h-4 w-4" /> Export master data
-            </a>
-            <a href={templatesUrls.blank} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
+            </button>
+            <button onClick={() => downloadFile(templatePaths.blank).catch((e) => alert("Download failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
               <FileSpreadsheet className="h-4 w-4" /> Blank template
-            </a>
+            </button>
             <Button variant="ghost" size="sm" onClick={() => setDelOpen(true)} className="text-danger hover:bg-dangerpale">
               <Trash2 className="h-4 w-4" />
             </Button>

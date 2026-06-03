@@ -10,7 +10,8 @@ import { Tabs, TabPanel } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { Download, FileText, Check, AlertCircle, RefreshCw, ExternalLink, Edit3 } from "lucide-react";
-import { generateApi, exportRoutes, type BSLine, type NoteSection, type CashFlowSection, type ComputedRatio } from "@/lib/project-api";
+import { generateApi, exportPaths, type BSLine, type NoteSection, type CashFlowSection, type ComputedRatio } from "@/lib/project-api";
+import { downloadFile } from "@/lib/api";
 
 type TabId = "bs" | "pl" | "notes" | "cashflow" | "ratios" | "eps";
 
@@ -44,8 +45,8 @@ export default function PreviewPage() {
         generateApi.ratios(pid),
         generateApi.validate(pid).catch(() => null),
       ]);
-      setBs(b); setPl(p); setNotes(n); setCf(c);
-      setRatios(r.ratios || []); setEps(r.eps); setValidation(v);
+      setBs(Array.isArray(b) ? b : []); setPl(Array.isArray(p) ? p : []); setNotes(Array.isArray(n) ? n : []); setCf(Array.isArray(c) ? c : []);
+      setRatios(Array.isArray(r?.ratios) ? r.ratios : []); setEps(r.eps); setValidation(v);
     } catch (e: any) { setErr(e?.message || "Failed to generate"); }
     finally { setBusy(false); }
   }
@@ -58,12 +59,12 @@ export default function PreviewPage() {
       actions={
         <div className="flex gap-2">
           <Button size="sm" variant="ghost" onClick={reload} disabled={busy}><RefreshCw className="h-4 w-4" />Refresh</Button>
-          <a href={exportRoutes.excel(pid)} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy-light">
+          <button onClick={() => downloadFile(exportPaths.excel(pid)).catch((e) => alert("Export failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy-light">
             <Download className="h-3.5 w-3.5" /> Excel
-          </a>
-          <a href={exportRoutes.pdf(pid)} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface">
+          </button>
+          <button onClick={() => downloadFile(exportPaths.pdf(pid)).catch((e) => alert("Export failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface">
             <Download className="h-3.5 w-3.5" /> PDF
-          </a>
+          </button>
         </div>
       }>
       {err && <div className="mb-4 rounded-lg bg-dangerpale px-3 py-2 text-sm text-danger">{err}</div>}

@@ -52,7 +52,7 @@ export function CustomCoATab({ clientId, onChanged }: { clientId: number; onChan
   const [editDraft, setEditDraft] = useState<Partial<CustomCoA>>({});
 
   async function reload() {
-    try { setErr(""); setRows(await customCoAApi.list(clientId)); }
+    try { setErr(""); { const _d = await customCoAApi.list(clientId); setRows(Array.isArray(_d) ? _d : []); } }
     catch (e: any) { setErr(e?.message || "Failed to load"); setRows([]); }
   }
   useEffect(() => { reload(); }, [clientId]);

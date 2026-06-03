@@ -48,7 +48,7 @@ export function PoliciesTab({ clientId, onChanged }: { clientId: number; onChang
   const [editDraft, setEditDraft] = useState<Partial<Policy>>({});
 
   async function reload() {
-    try { setErr(""); setRows(await policiesApi.list(clientId)); }
+    try { setErr(""); { const _d = await policiesApi.list(clientId); setRows(Array.isArray(_d) ? _d : []); } }
     catch (e: any) { setErr(e?.message || "Failed to load"); setRows([]); }
   }
   useEffect(() => { reload(); }, [clientId]);

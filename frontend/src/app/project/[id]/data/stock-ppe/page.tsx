@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Empty } from "@/components/ui/empty";
 import { Save, Package, FileSpreadsheet, Upload, Download } from "lucide-react";
 import { stockApi, ppeApi, ppeTemplate, type ClosingStockRow, type PPEEntry } from "@/lib/project-api";
+import { downloadFile } from "@/lib/api";
 import { Dialog } from "@/components/ui/dialog";
 import { FileDrop } from "@/components/ui/file-upload";
 
@@ -38,7 +39,7 @@ export default function StockPPEPage() {
       setImportResult(r);
       // Refresh PPE list
       const fresh = await ppeApi.list(pid);
-      setPpe(fresh);
+      setPpe(Array.isArray(fresh) ? fresh : []);
     } catch (e: any) {
       setImportErr(e?.message || "PPE import failed");
     } finally { setImportBusy(false); }
@@ -48,7 +49,7 @@ export default function StockPPEPage() {
     try {
       setErr("");
       const [s, p, t] = await Promise.all([stockApi.list(pid), ppeApi.list(pid), stockApi.types(pid).catch(() => [])]);
-      setStock(s); setPpe(p); setStockTypes(t || []);
+      setStock(Array.isArray(s) ? s : []); setPpe(Array.isArray(p) ? p : []); setStockTypes(Array.isArray(t) ? t : []);
     } catch (e: any) { setErr(e?.message || "Failed to load"); }
   }
   useEffect(() => { if (session) reload(); }, [session, pid]);
@@ -131,9 +132,9 @@ export default function StockPPEPage() {
           <div className="flex items-center justify-between w-full">
             <h3 className="font-medium text-navy"><FileSpreadsheet className="inline h-4 w-4 mr-1.5 -mt-0.5" />PPE schedule</h3>
             <div className="flex gap-2">
-              <a href={ppeTemplate.downloadUrl} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface">
+              <button onClick={() => downloadFile(ppeTemplate.downloadPath).catch((e) => alert("Download failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface">
                 <Download className="h-3.5 w-3.5" /> Template
-              </a>
+              </button>
               <Button size="sm" variant="outline" onClick={() => { setImportOpen(true); setImportFile(null); setImportResult(null); setImportErr(""); }}>
                 <Upload className="h-4 w-4" /> Import PPE
               </Button>

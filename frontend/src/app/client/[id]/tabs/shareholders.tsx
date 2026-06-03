@@ -54,7 +54,7 @@ export function ShareholdersTab({ clientId, onChanged }: { clientId: number; onC
   const [editDraft, setEditDraft] = useState<Partial<Shareholder>>({});
 
   async function reload() {
-    try { setErr(""); setRows(await shareholdersApi.list(clientId)); }
+    try { setErr(""); { const _d = await shareholdersApi.list(clientId); setRows(Array.isArray(_d) ? _d : []); } }
     catch (e: any) { setErr(e?.message || "Failed to load"); setRows([]); }
   }
   useEffect(() => { reload(); }, [clientId]);

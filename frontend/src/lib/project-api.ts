@@ -152,15 +152,15 @@ export const generateApi = {
     apiGet<{ note_ref: string; ledgers: { ledger_name: string; coa_code: string; cy_net: number; py_net: number; tb_row_id: number }[]; cy_total: number; py_total: number }>(`/preview/${pid}/line-detail?note_ref=${encodeURIComponent(note_ref)}`),
 };
 
-export const exportRoutes = {
-  excel: (pid: number) => backendUrl(`/export/${pid}/excel`),
-  pdf:   (pid: number) => backendUrl(`/export/${pid}/pdf`),
-  generate: (pid: number) => backendUrl(`/export/${pid}/generate`),
+export const exportPaths = {
+  excel: (pid: number) => `/export/${pid}/excel`,
+  pdf:   (pid: number) => `/export/${pid}/pdf`,
+  generate: (pid: number) => `/export/${pid}/generate`,
 };
 
 // ---------- PPE template + import ----------
 export const ppeTemplate = {
-  downloadUrl: backendUrl("/templates/ppe"),
+  downloadPath: "/templates/ppe",
   import: async (projectId: number, file: File) => {
     const fd = new FormData();
     fd.append("file", file);

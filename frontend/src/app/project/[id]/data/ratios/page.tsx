@@ -23,7 +23,7 @@ export default function RatiosPage() {
     setErr("");
     try {
       const [p, c] = await Promise.all([ratiosApi.py1Get(pid), ratiosApi.compute(pid)]);
-      setPy1(p || []); setComputed(c.ratios || []);
+      setPy1(Array.isArray(p) ? p : []); setComputed(Array.isArray(c?.ratios) ? c.ratios : []);
     } catch (e: any) { setErr(e?.message || "Failed to load"); }
   }
   useEffect(() => { if (session) reload(); }, [session, pid]);

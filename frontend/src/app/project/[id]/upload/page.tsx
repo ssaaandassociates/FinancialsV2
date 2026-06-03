@@ -19,9 +19,10 @@ import {
   History, ChevronRight, Loader2
 } from "lucide-react";
 import {
-  tbApi, mappingApi, exportUrls,
+  tbApi, mappingApi, exportPaths,
   type TBRow, type CoACode, type AutoMapResult, type PrevProjectOpt,
 } from "@/lib/mapping-api";
+import { downloadFile } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "unmapped" | "mapped" | "custom";
@@ -73,8 +74,8 @@ export default function MappingPage() {
         tbApi.list(projectId),
         mappingApi.listCoA(),
       ]);
-      setRows(tb);
-      setCoa(codes);
+      setRows(Array.isArray(tb) ? tb : []);
+      setCoa(Array.isArray(codes) ? codes : []);
     } catch (e: any) {
       setPageError(e?.message || "Failed to load mapping data");
       setRows([]);
@@ -312,13 +313,13 @@ export default function MappingPage() {
               </Button>
             </div>
             <div className="flex gap-2">
-              <a href={exportUrls.tbTemplate} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
+              <button onClick={() => downloadFile(exportPaths.tbTemplate).catch((e) => alert("Download failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
                 <FileDown className="h-4 w-4" /> TB template
-              </a>
+              </button>
               {rows && rows.length > 0 && (
-                <a href={exportUrls.mappedTB(projectId)} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
+                <button onClick={() => downloadFile(exportPaths.mappedTB(projectId)).catch((e) => alert("Download failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
                   <Download className="h-4 w-4" /> Export
-                </a>
+                </button>
               )}
             </div>
           </CardBody>

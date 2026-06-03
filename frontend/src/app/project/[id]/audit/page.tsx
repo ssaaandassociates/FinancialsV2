@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Empty } from "@/components/ui/empty";
 import { Plus, Trash2, Save, Edit3, Check, AlertCircle, Download, FileText } from "lucide-react";
 import { auditApi, type AuditEntry } from "@/lib/project-api";
-import { backendUrl } from "@/lib/api";
+import { downloadFile } from "@/lib/api";
 
 function empty(project_id: number): Partial<AuditEntry> {
   return { project_id, date: new Date().toISOString().slice(0,10), description: "", dr_coa_code: "", cr_coa_code: "", amount: 0, status: "proposed" };
@@ -64,7 +64,8 @@ export default function AuditPage() {
     try {
       setErr("");
       const [list, chk] = await Promise.all([auditApi.list(projectId), auditApi.check(projectId)]);
-      setRows(list); setCheck(chk);
+      const safeList = Array.isArray(list) ? list : [];
+      setRows(safeList); setCheck(chk);
     } catch (e: any) { setErr(e?.message || "Failed to load"); setRows([]); }
   }
   useEffect(() => { if (session) reload(); }, [session, projectId]);
@@ -101,9 +102,9 @@ export default function AuditPage() {
               {check.balanced ? `Balanced (\u20B9${check.dr_total.toLocaleString("en-IN")})` : `Out by \u20B9${(check.dr_total - check.cr_total).toLocaleString("en-IN")}`}
             </span>
           )}
-          <a href={backendUrl(`/audit/${projectId}/export`)} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface">
+          <button onClick={() => downloadFile(`/audit/${projectId}/export`).catch((e) => alert("Export failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface">
             <Download className="h-3.5 w-3.5" /> Export
-          </a>
+          </button>
           <Button size="sm" variant="gold" onClick={() => { setAdding(true); setDraft(empty(projectId)); setEditingId(null); }}>
             <Plus className="h-4 w-4" /> New entry
           </Button>

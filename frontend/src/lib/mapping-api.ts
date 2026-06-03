@@ -89,7 +89,7 @@ export const mappingApi = {
     apiGet<PrevProjectOpt[]>(`/map/previous-projects/${projectId}`),
 };
 
-export const exportUrls = {
-  mappedTB:  (projectId: number) => backendUrl(`/export-mapped-tb/${projectId}`),
-  tbTemplate: backendUrl("/tb-template/tally"),
+export const exportPaths = {
+  mappedTB:  (projectId: number) => `/export-mapped-tb/${projectId}`,
+  tbTemplate: "/tb-template/tally",
 };

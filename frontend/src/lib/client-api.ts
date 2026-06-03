@@ -125,10 +125,12 @@ export const projectsApi = {
   remove:    (id: number)                   => apiDelete(`/projects/${id}`),
 };
 
-export const templatesUrls = {
-  blank:    backendUrl("/templates/master-blank"),
-  current:  (clientId: number) => backendUrl(`/templates/master-current/${clientId}`),
-  ppe:      backendUrl("/templates/ppe"),
+// Paths (NOT full URLs) — passed to downloadFile() which adds the backend
+// host + auth header. Plain <a href> can't send the Bearer token.
+export const templatePaths = {
+  blank:    "/templates/master-blank",
+  current:  (clientId: number) => `/templates/master-current/${clientId}`,
+  ppe:      "/templates/ppe",
 };
 
 // ---------- Master data import ----------
