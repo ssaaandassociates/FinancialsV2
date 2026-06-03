@@ -96,6 +96,10 @@ def logout():
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
+        # CORS preflight requests (OPTIONS) must pass through unauthenticated
+        # so the CORSMiddleware can answer them.
+        if request.method == "OPTIONS":
+            return await call_next(request)
         path = request.url.path
         if any(path.startswith(s) for s in ["/login", "/static", "/docs", "/openapi.json", "/favicon", "/health"]):
             return await call_next(request)
