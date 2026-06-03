@@ -47,7 +47,7 @@ def verify_token(token: str) -> dict:
         claims = jwt.decode(
             token,
             SUPABASE_JWT_SECRET,
-            algorithms=["HS256", "ES256", "RS256"],,
+            algorithms=["HS256", "ES256", "RS256"],
             audience="authenticated",
             options={"verify_aud": True},
         )
