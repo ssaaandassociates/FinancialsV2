@@ -13,6 +13,35 @@ function empty(client_id: number): Partial<CustomCoA> {
   return { client_id, code: "", particulars: "", parent_code: "", nature: "Dr", fs_type: "BS", note_ref: "" };
 }
 
+function CustomCoAForm({ value, onChange, onSave, onCancel, busy }: any) {
+  return (
+
+    <Card>
+      <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div><Label>Code *</Label><Input value={value.code || ""} onChange={(e: any) => onChange({ ...value, code: e.target.value })} placeholder="BS-AS-02-06-99" className="font-mono" /></div>
+        <div className="sm:col-span-2"><Label>Particulars *</Label><Input value={value.particulars || ""} onChange={(e: any) => onChange({ ...value, particulars: e.target.value })} placeholder="Custom: Sample Other Current Asset" /></div>
+        <div><Label>Parent code</Label><Input value={value.parent_code || ""} onChange={(e: any) => onChange({ ...value, parent_code: e.target.value })} placeholder="BS-AS-02-06" className="font-mono" /></div>
+        <div><Label>Nature</Label>
+          <Select value={value.nature || "Dr"} onChange={(e: any) => onChange({ ...value, nature: e.target.value })}>
+            <option value="Dr">Dr</option><option value="Cr">Cr</option>
+          </Select>
+        </div>
+        <div><Label>FS type</Label>
+          <Select value={value.fs_type || "BS"} onChange={(e: any) => onChange({ ...value, fs_type: e.target.value })}>
+            <option value="BS">Balance Sheet</option><option value="PL">Profit & Loss</option>
+          </Select>
+        </div>
+        <div><Label>Note ref</Label><Input value={value.note_ref || ""} onChange={(e: any) => onChange({ ...value, note_ref: e.target.value })} /></div>
+        <div className="sm:col-span-2 lg:col-span-3 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button onClick={onSave} disabled={busy || !value.code?.trim() || !value.particulars?.trim()}><Save className="h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
+        </div>
+      </CardBody>
+    </Card>
+  
+  );
+}
+
 export function CustomCoATab({ clientId, onChanged }: { clientId: number; onChanged: () => void }) {
   const [rows, setRows] = useState<CustomCoA[] | null>(null);
   const [err, setErr] = useState("");
@@ -44,30 +73,6 @@ export function CustomCoATab({ clientId, onChanged }: { clientId: number; onChan
     catch (e: any) { setErr(e?.message || "Delete failed"); }
   }
 
-  const Form = ({ value, onChange, onSave, onCancel }: any) => (
-    <Card>
-      <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div><Label>Code *</Label><Input value={value.code || ""} onChange={(e: any) => onChange({ ...value, code: e.target.value })} placeholder="BS-AS-02-06-99" className="font-mono" /></div>
-        <div className="sm:col-span-2"><Label>Particulars *</Label><Input value={value.particulars || ""} onChange={(e: any) => onChange({ ...value, particulars: e.target.value })} placeholder="Custom: Sample Other Current Asset" /></div>
-        <div><Label>Parent code</Label><Input value={value.parent_code || ""} onChange={(e: any) => onChange({ ...value, parent_code: e.target.value })} placeholder="BS-AS-02-06" className="font-mono" /></div>
-        <div><Label>Nature</Label>
-          <Select value={value.nature || "Dr"} onChange={(e: any) => onChange({ ...value, nature: e.target.value })}>
-            <option value="Dr">Dr</option><option value="Cr">Cr</option>
-          </Select>
-        </div>
-        <div><Label>FS type</Label>
-          <Select value={value.fs_type || "BS"} onChange={(e: any) => onChange({ ...value, fs_type: e.target.value })}>
-            <option value="BS">Balance Sheet</option><option value="PL">Profit & Loss</option>
-          </Select>
-        </div>
-        <div><Label>Note ref</Label><Input value={value.note_ref || ""} onChange={(e: any) => onChange({ ...value, note_ref: e.target.value })} /></div>
-        <div className="sm:col-span-2 lg:col-span-3 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
-          <Button onClick={onSave} disabled={busy || !value.code?.trim() || !value.particulars?.trim()}><Save className="h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
-        </div>
-      </CardBody>
-    </Card>
-  );
 
   return (
     <div className="space-y-5">
@@ -85,7 +90,7 @@ export function CustomCoATab({ clientId, onChanged }: { clientId: number; onChan
 
       {err && <div className="rounded-lg bg-dangerpale px-3 py-2 text-sm text-danger">{err}</div>}
 
-      {adding && <Form value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => { setAdding(false); setDraft(empty(clientId)); }} />}
+      {adding && <CustomCoAForm value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => { setAdding(false); setDraft(empty(clientId)); }} busy={busy} />}
 
       {rows === null ? (
         <Card><CardBody><div className="text-sm text-muted">Loading…</div></CardBody></Card>
@@ -114,7 +119,7 @@ export function CustomCoATab({ clientId, onChanged }: { clientId: number; onChan
               <tbody>
                 {rows.map((c) => editingId === c.id ? (
                   <tr key={c.id}><td colSpan={7} className="p-4">
-                    <Form value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, c.id)} onCancel={() => { setEditingId(null); setEditDraft({}); }} />
+                    <CustomCoAForm value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, c.id)} onCancel={() => { setEditingId(null); setEditDraft({}); }} busy={busy} />
                   </td></tr>
                 ) : (
                   <tr key={c.id} className="border-b border-line text-sm last:border-0">

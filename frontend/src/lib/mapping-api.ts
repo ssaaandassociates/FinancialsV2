@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, backendUrl, bearerHeaders } from "@/lib/api";
 
 export interface TBRow {
   id: number;
@@ -53,24 +53,16 @@ export const tbApi = {
     const fd = new FormData();
     fd.append("file", file);
     // Don't use apiPost (it JSON-encodes); send FormData with auth header only
-    const { supabase } = await import("@/lib/supabase");
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    const headers: HeadersInit = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`/api/upload-tb/${projectId}`, { method: "POST", body: fd, headers });
+    const headers = await bearerHeaders();
+    const res = await fetch(backendUrl(`/upload-tb/${projectId}`), { method: "POST", body: fd, headers });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
   importMappedTB: async (projectId: number, file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    const { supabase } = await import("@/lib/supabase");
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    const headers: HeadersInit = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`/api/import-mapped-tb/${projectId}`, { method: "POST", body: fd, headers });
+    const headers = await bearerHeaders();
+    const res = await fetch(backendUrl(`/import-mapped-tb/${projectId}`), { method: "POST", body: fd, headers });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
@@ -98,6 +90,6 @@ export const mappingApi = {
 };
 
 export const exportUrls = {
-  mappedTB:  (projectId: number) => `/api/export-mapped-tb/${projectId}`,
-  tbTemplate: "/api/tb-template/tally",
+  mappedTB:  (projectId: number) => backendUrl(`/export-mapped-tb/${projectId}`),
+  tbTemplate: backendUrl("/tb-template/tally"),
 };

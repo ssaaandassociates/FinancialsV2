@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, backendUrl, bearerHeaders } from "@/lib/api";
 
 // ============ Audit ============
 export interface AuditEntry {
@@ -153,23 +153,19 @@ export const generateApi = {
 };
 
 export const exportRoutes = {
-  excel: (pid: number) => `/api/export/${pid}/excel`,
-  pdf:   (pid: number) => `/api/export/${pid}/pdf`,
-  generate: (pid: number) => `/api/export/${pid}/generate`,
+  excel: (pid: number) => backendUrl(`/export/${pid}/excel`),
+  pdf:   (pid: number) => backendUrl(`/export/${pid}/pdf`),
+  generate: (pid: number) => backendUrl(`/export/${pid}/generate`),
 };
 
 // ---------- PPE template + import ----------
 export const ppeTemplate = {
-  downloadUrl: "/api/templates/ppe",
+  downloadUrl: backendUrl("/templates/ppe"),
   import: async (projectId: number, file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    const { supabase } = await import("@/lib/supabase");
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    const headers: HeadersInit = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`/api/templates/ppe-import/${projectId}`, {
+    const headers = await bearerHeaders();
+    const res = await fetch(backendUrl(`/templates/ppe-import/${projectId}`), {
       method: "POST", body: fd, headers,
     });
     if (!res.ok) throw new Error(await res.text());

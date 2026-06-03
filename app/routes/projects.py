@@ -268,18 +268,27 @@ class DirectorInput(BaseModel):
     name: str
     din: str | None = None
     designation: str = "Director"
+    date_of_appointment: str | None = None
     pan: str | None = None
     is_kmp: bool = False
     signs_financials: bool = False
+    is_active: bool = True
 
 
 @router.post("/directors/")
 def add_director(payload: DirectorInput, db: Session = Depends(get_db)):
     from app.models.client import Director
+    from datetime import datetime
+    doa = None
+    if payload.date_of_appointment:
+        try:
+            doa = datetime.strptime(payload.date_of_appointment, "%Y-%m-%d").date()
+        except ValueError:
+            doa = None
     d = Director(client_id=payload.client_id, name=payload.name,
                  din=payload.din, designation=payload.designation,
-                 pan=payload.pan, is_kmp=payload.is_kmp,
-                 signs_financials=payload.signs_financials)
+                 date_of_appointment=doa, pan=payload.pan, is_kmp=payload.is_kmp,
+                 signs_financials=payload.signs_financials, is_active=payload.is_active)
     db.add(d); db.commit(); db.refresh(d)
     return {"id": d.id, "name": d.name, "din": d.din}
 
@@ -287,20 +296,32 @@ def add_director(payload: DirectorInput, db: Session = Depends(get_db)):
 @router.get("/directors/{client_id}")
 def list_directors(client_id: int, db: Session = Depends(get_db)):
     from app.models.client import Director
-    dirs = db.query(Director).filter(Director.client_id == client_id, Director.is_active == True).all()
+    # Return ALL directors (active + inactive) so the UI can show status and
+    # allow reactivation. The UI badges inactive ones; callers that only want
+    # active KMP use the /kmp endpoint.
+    dirs = db.query(Director).filter(Director.client_id == client_id).all()
     return [{"id": d.id, "name": d.name, "din": d.din, "designation": d.designation,
-             "is_kmp": d.is_kmp, "signs_financials": d.signs_financials, "pan": d.pan} for d in dirs]
+             "date_of_appointment": d.date_of_appointment.isoformat() if d.date_of_appointment else None,
+             "is_kmp": d.is_kmp, "signs_financials": d.signs_financials,
+             "is_active": d.is_active, "pan": d.pan} for d in dirs]
 
 
 @router.put("/directors/{director_id}")
 def update_director(director_id: int, payload: DirectorInput, db: Session = Depends(get_db)):
     from app.models.client import Director
+    from datetime import datetime
     d = db.query(Director).filter(Director.id == director_id).first()
     if not d: raise HTTPException(404, "Director not found")
-    for k in ['name', 'din', 'designation', 'pan', 'is_kmp', 'signs_financials']:
+    for k in ['name', 'din', 'designation', 'pan', 'is_kmp', 'signs_financials', 'is_active']:
         v = getattr(payload, k, None)
         if v is not None:
             setattr(d, k, v)
+    # Date handled separately (string -> date)
+    if payload.date_of_appointment is not None:
+        try:
+            d.date_of_appointment = datetime.strptime(payload.date_of_appointment, "%Y-%m-%d").date() if payload.date_of_appointment else None
+        except ValueError:
+            pass
     db.commit()
     return {"id": d.id, "status": "updated"}
 

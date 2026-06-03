@@ -15,6 +15,29 @@ function empty(client_id: number, nextNum: number): Partial<Policy> {
   return { client_id, policy_number: nextNum, title: "", body: "", is_active: true };
 }
 
+function PolicyForm({ value, onChange, onSave, onCancel, busy }: any) {
+  return (
+
+    <Card>
+      <CardBody className="grid gap-4">
+        <div className="grid gap-4 sm:grid-cols-[100px_1fr]">
+          <div><Label>Number</Label><Input type="number" value={value.policy_number ?? 1} onChange={(e: any) => onChange({ ...value, policy_number: Number(e.target.value) })} /></div>
+          <div><Label>Title *</Label><Input value={value.title || ""} onChange={(e: any) => onChange({ ...value, title: e.target.value })} placeholder="e.g. Basis of Preparation" /></div>
+        </div>
+        <div><Label>Body</Label><Textarea rows={6} value={value.body || ""} onChange={(e: any) => onChange({ ...value, body: e.target.value })} /></div>
+        <div className="flex items-center justify-between">
+          <Checkbox label="Active (include in this year's financials)" checked={value.is_active !== false} onChange={(e: any) => onChange({ ...value, is_active: e.target.checked })} />
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
+            <Button onClick={onSave} disabled={busy || !value.title?.trim()}><Save className="h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
+  
+  );
+}
+
 export function PoliciesTab({ clientId, onChanged }: { clientId: number; onChanged: () => void }) {
   const [rows, setRows] = useState<Policy[] | null>(null);
   const [err, setErr] = useState("");
@@ -52,24 +75,6 @@ export function PoliciesTab({ clientId, onChanged }: { clientId: number; onChang
     catch (e: any) { setErr(e?.message || "Delete failed"); }
   }
 
-  const Form = ({ value, onChange, onSave, onCancel }: any) => (
-    <Card>
-      <CardBody className="grid gap-4">
-        <div className="grid gap-4 sm:grid-cols-[100px_1fr]">
-          <div><Label>Number</Label><Input type="number" value={value.policy_number ?? 1} onChange={(e: any) => onChange({ ...value, policy_number: Number(e.target.value) })} /></div>
-          <div><Label>Title *</Label><Input value={value.title || ""} onChange={(e: any) => onChange({ ...value, title: e.target.value })} placeholder="e.g. Basis of Preparation" /></div>
-        </div>
-        <div><Label>Body</Label><Textarea rows={6} value={value.body || ""} onChange={(e: any) => onChange({ ...value, body: e.target.value })} /></div>
-        <div className="flex items-center justify-between">
-          <Checkbox label="Active (include in this year's financials)" checked={value.is_active !== false} onChange={(e: any) => onChange({ ...value, is_active: e.target.checked })} />
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
-            <Button onClick={onSave} disabled={busy || !value.title?.trim()}><Save className="h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
-          </div>
-        </div>
-      </CardBody>
-    </Card>
-  );
 
   return (
     <div className="space-y-5">
@@ -80,7 +85,7 @@ export function PoliciesTab({ clientId, onChanged }: { clientId: number; onChang
 
       {err && <div className="rounded-lg bg-dangerpale px-3 py-2 text-sm text-danger">{err}</div>}
 
-      {adding && <Form value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => setAdding(false)} />}
+      {adding && <PolicyForm value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => setAdding(false)} busy={busy} />}
 
       {rows === null ? (
         <Card><CardBody><div className="text-sm text-muted">Loading…</div></CardBody></Card>
@@ -95,7 +100,7 @@ export function PoliciesTab({ clientId, onChanged }: { clientId: number; onChang
         <div className="space-y-2">
           {rows.sort((a, b) => (a.policy_number || 0) - (b.policy_number || 0)).map((p) =>
             editingId === p.id ? (
-              <Form key={p.id} value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, p.id)} onCancel={() => setEditingId(null)} />
+              <PolicyForm key={p.id} value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, p.id)} onCancel={() => setEditingId(null)} busy={busy} />
             ) : (
               <Card key={p.id}>
                 <CardBody>

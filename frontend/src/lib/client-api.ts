@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, backendUrl, bearerHeaders } from "@/lib/api";
 
 // ---------- Types (matching backend models) ----------
 
@@ -126,9 +126,9 @@ export const projectsApi = {
 };
 
 export const templatesUrls = {
-  blank:    "/api/templates/master-blank",
-  current:  (clientId: number) => `/api/templates/master-current/${clientId}`,
-  ppe:      "/api/templates/ppe",
+  blank:    backendUrl("/templates/master-blank"),
+  current:  (clientId: number) => backendUrl(`/templates/master-current/${clientId}`),
+  ppe:      backendUrl("/templates/ppe"),
 };
 
 // ---------- Master data import ----------
@@ -145,12 +145,8 @@ export interface MasterImportResult {
 export async function importMasterData(clientId: number, file: File): Promise<MasterImportResult> {
   const fd = new FormData();
   fd.append("file", file);
-  const { supabase } = await import("@/lib/supabase");
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  const headers: HeadersInit = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`/api/templates/master-import/${clientId}`, {
+  const headers = await bearerHeaders();
+  const res = await fetch(backendUrl(`/templates/master-import/${clientId}`), {
     method: "POST", body: fd, headers,
   });
   if (!res.ok) throw new Error(await res.text());

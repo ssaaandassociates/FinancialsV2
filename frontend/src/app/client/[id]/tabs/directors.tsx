@@ -15,6 +15,37 @@ function emptyDir(client_id: number): Partial<Director> {
            is_kmp: false, signs_financials: false, is_active: true };
 }
 
+// Defined at module level (NOT inside the component) so it is not recreated on
+// every render — recreating it remounts the inputs and steals focus after one keystroke.
+function DirectorForm({ value, onChange, onSave, onCancel, busy }: {
+  value: Partial<Director>;
+  onChange: (v: Partial<Director>) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Card>
+      <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="sm:col-span-2"><Label>Name *</Label><Input value={value.name || ""} onChange={(e) => onChange({ ...value, name: e.target.value })} /></div>
+        <div><Label>DIN</Label><Input value={value.din || ""} onChange={(e) => onChange({ ...value, din: e.target.value })} /></div>
+        <div><Label>Designation</Label><Input value={value.designation || ""} onChange={(e) => onChange({ ...value, designation: e.target.value })} /></div>
+        <div><Label>Date of appointment</Label><Input type="date" value={value.date_of_appointment || ""} onChange={(e) => onChange({ ...value, date_of_appointment: e.target.value })} /></div>
+        <div><Label>PAN</Label><Input value={value.pan || ""} onChange={(e) => onChange({ ...value, pan: e.target.value })} /></div>
+        <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-4 pt-2">
+          <Checkbox label="Is KMP" checked={!!value.is_kmp} onChange={(e) => onChange({ ...value, is_kmp: e.target.checked })} />
+          <Checkbox label="Signs financials" checked={!!value.signs_financials} onChange={(e) => onChange({ ...value, signs_financials: e.target.checked })} />
+          <Checkbox label="Active" checked={value.is_active !== false} onChange={(e) => onChange({ ...value, is_active: e.target.checked })} />
+        </div>
+        <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button onClick={onSave} disabled={busy || !value.name?.trim()}><Save className="h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
 export function DirectorsTab({ clientId, onChanged }: { clientId: number; onChanged: () => void }) {
   const [rows, setRows] = useState<Director[] | null>(null);
   const [err, setErr] = useState("");
@@ -49,27 +80,6 @@ export function DirectorsTab({ clientId, onChanged }: { clientId: number; onChan
   function startEdit(d: Director) { setEditingId(d.id); setEditDraft({ ...d }); }
   function cancelEdit() { setEditingId(null); setEditDraft({}); }
 
-  const Form = ({ value, onChange, onSave, onCancel }: { value: Partial<Director>; onChange: (v: Partial<Director>) => void; onSave: () => void; onCancel: () => void; }) => (
-    <Card>
-      <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="sm:col-span-2"><Label>Name *</Label><Input value={value.name || ""} onChange={(e) => onChange({ ...value, name: e.target.value })} /></div>
-        <div><Label>DIN</Label><Input value={value.din || ""} onChange={(e) => onChange({ ...value, din: e.target.value })} /></div>
-        <div><Label>Designation</Label><Input value={value.designation || ""} onChange={(e) => onChange({ ...value, designation: e.target.value })} /></div>
-        <div><Label>Date of appointment</Label><Input type="date" value={value.date_of_appointment || ""} onChange={(e) => onChange({ ...value, date_of_appointment: e.target.value })} /></div>
-        <div><Label>PAN</Label><Input value={value.pan || ""} onChange={(e) => onChange({ ...value, pan: e.target.value })} /></div>
-        <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-4 pt-2">
-          <Checkbox label="Is KMP" checked={!!value.is_kmp} onChange={(e) => onChange({ ...value, is_kmp: e.target.checked })} />
-          <Checkbox label="Signs financials" checked={!!value.signs_financials} onChange={(e) => onChange({ ...value, signs_financials: e.target.checked })} />
-          <Checkbox label="Active" checked={value.is_active !== false} onChange={(e) => onChange({ ...value, is_active: e.target.checked })} />
-        </div>
-        <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
-          <Button onClick={onSave} disabled={busy || !value.name?.trim()}><Save className="h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
-        </div>
-      </CardBody>
-    </Card>
-  );
-
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -81,7 +91,7 @@ export function DirectorsTab({ clientId, onChanged }: { clientId: number; onChan
 
       {err && <div className="rounded-lg bg-dangerpale px-3 py-2 text-sm text-danger">{err}</div>}
 
-      {adding && <Form value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => { setAdding(false); setDraft(emptyDir(clientId)); }} />}
+      {adding && <DirectorForm value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => { setAdding(false); setDraft(emptyDir(clientId)); }} busy={busy} />}
 
       {rows === null ? (
         <Card><CardBody><div className="text-sm text-muted">Loading…</div></CardBody></Card>
@@ -96,7 +106,7 @@ export function DirectorsTab({ clientId, onChanged }: { clientId: number; onChan
         <div className="space-y-2">
           {rows.map((d) =>
             editingId === d.id ? (
-              <Form key={d.id} value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, d.id)} onCancel={cancelEdit} />
+              <DirectorForm key={d.id} value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, d.id)} onCancel={cancelEdit} busy={busy} />
             ) : (
               <Card key={d.id}>
                 <CardBody className="flex items-center justify-between gap-4">

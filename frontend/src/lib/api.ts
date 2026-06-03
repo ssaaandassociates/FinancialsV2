@@ -21,6 +21,24 @@ function url(path: string) {
   return BACKEND ? `${BACKEND}/api${path}` : `/api${path}`;
 }
 
+/**
+ * Public helper to build a full backend URL for downloads (href) and direct
+ * fetch() calls (file uploads) that don't go through apiGet/apiPost.
+ * `path` should start with "/" and NOT include the "/api" prefix.
+ */
+export function backendUrl(path: string) {
+  return url(path);
+}
+
+/** Bearer auth headers for direct fetch() calls (e.g. file uploads). */
+export async function bearerHeaders(): Promise<HeadersInit> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const headers: HeadersInit = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
 export async function apiGet<T = any>(path: string): Promise<T> {
   const res = await fetch(url(path), { headers: await authHeaders() });
   if (!res.ok) throw new ApiError(res.status, await safeText(res));

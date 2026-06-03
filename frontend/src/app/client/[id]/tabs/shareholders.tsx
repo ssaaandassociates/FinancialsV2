@@ -15,6 +15,35 @@ function empty(client_id: number): Partial<Shareholder> {
            pct_holding_cy: 0, pct_holding_py: 0, is_promoter: false, is_director: false, din: "", pan: "" };
 }
 
+function ShareholderForm({ value, onChange, onSave, onCancel, busy }: any) {
+  return (
+
+    <Card>
+      <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="sm:col-span-2"><Label>Name *</Label><Input value={value.name || ""} onChange={(e: any) => onChange({ ...value, name: e.target.value })} /></div>
+        <div><Label>PAN</Label><Input value={value.pan || ""} onChange={(e: any) => onChange({ ...value, pan: e.target.value })} /></div>
+        <div><Label>Face value</Label><Input type="number" value={value.face_value ?? 10} onChange={(e: any) => onChange({ ...value, face_value: Number(e.target.value) })} /></div>
+        <div><Label>No. of shares (CY)</Label><Input type="number" value={value.no_of_shares_cy ?? 0} onChange={(e: any) => onChange({ ...value, no_of_shares_cy: Number(e.target.value) })} /></div>
+        <div><Label>No. of shares (PY)</Label><Input type="number" value={value.no_of_shares_py ?? 0} onChange={(e: any) => onChange({ ...value, no_of_shares_py: Number(e.target.value) })} /></div>
+        <div><Label>% holding (CY)</Label><Input type="number" step="0.01" value={value.pct_holding_cy ?? 0} onChange={(e: any) => onChange({ ...value, pct_holding_cy: Number(e.target.value) })} /></div>
+        <div><Label>% holding (PY)</Label><Input type="number" step="0.01" value={value.pct_holding_py ?? 0} onChange={(e: any) => onChange({ ...value, pct_holding_py: Number(e.target.value) })} /></div>
+        <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap gap-4 pt-2">
+          <Checkbox label="Is promoter" checked={!!value.is_promoter} onChange={(e: any) => onChange({ ...value, is_promoter: e.target.checked })} />
+          <Checkbox label="Is director (auto-link)" checked={!!value.is_director} onChange={(e: any) => onChange({ ...value, is_director: e.target.checked })} />
+          {value.is_director && (
+            <div className="flex-1 min-w-[180px]"><Input placeholder="DIN" value={value.din || ""} onChange={(e: any) => onChange({ ...value, din: e.target.value })} /></div>
+          )}
+        </div>
+        <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button onClick={onSave} disabled={busy || !value.name?.trim()}><Save className="h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
+        </div>
+      </CardBody>
+    </Card>
+  
+  );
+}
+
 export function ShareholdersTab({ clientId, onChanged }: { clientId: number; onChanged: () => void }) {
   const [rows, setRows] = useState<Shareholder[] | null>(null);
   const [err, setErr] = useState("");
@@ -46,30 +75,6 @@ export function ShareholdersTab({ clientId, onChanged }: { clientId: number; onC
     catch (e: any) { setErr(e?.message || "Delete failed"); }
   }
 
-  const Form = ({ value, onChange, onSave, onCancel }: any) => (
-    <Card>
-      <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="sm:col-span-2"><Label>Name *</Label><Input value={value.name || ""} onChange={(e: any) => onChange({ ...value, name: e.target.value })} /></div>
-        <div><Label>PAN</Label><Input value={value.pan || ""} onChange={(e: any) => onChange({ ...value, pan: e.target.value })} /></div>
-        <div><Label>Face value</Label><Input type="number" value={value.face_value ?? 10} onChange={(e: any) => onChange({ ...value, face_value: Number(e.target.value) })} /></div>
-        <div><Label>No. of shares (CY)</Label><Input type="number" value={value.no_of_shares_cy ?? 0} onChange={(e: any) => onChange({ ...value, no_of_shares_cy: Number(e.target.value) })} /></div>
-        <div><Label>No. of shares (PY)</Label><Input type="number" value={value.no_of_shares_py ?? 0} onChange={(e: any) => onChange({ ...value, no_of_shares_py: Number(e.target.value) })} /></div>
-        <div><Label>% holding (CY)</Label><Input type="number" step="0.01" value={value.pct_holding_cy ?? 0} onChange={(e: any) => onChange({ ...value, pct_holding_cy: Number(e.target.value) })} /></div>
-        <div><Label>% holding (PY)</Label><Input type="number" step="0.01" value={value.pct_holding_py ?? 0} onChange={(e: any) => onChange({ ...value, pct_holding_py: Number(e.target.value) })} /></div>
-        <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap gap-4 pt-2">
-          <Checkbox label="Is promoter" checked={!!value.is_promoter} onChange={(e: any) => onChange({ ...value, is_promoter: e.target.checked })} />
-          <Checkbox label="Is director (auto-link)" checked={!!value.is_director} onChange={(e: any) => onChange({ ...value, is_director: e.target.checked })} />
-          {value.is_director && (
-            <div className="flex-1 min-w-[180px]"><Input placeholder="DIN" value={value.din || ""} onChange={(e: any) => onChange({ ...value, din: e.target.value })} /></div>
-          )}
-        </div>
-        <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
-          <Button onClick={onSave} disabled={busy || !value.name?.trim()}><Save className="h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
-        </div>
-      </CardBody>
-    </Card>
-  );
 
   const fmtPct = (n?: number) => n != null ? `${Number(n).toFixed(2)}%` : "—";
 
@@ -84,7 +89,7 @@ export function ShareholdersTab({ clientId, onChanged }: { clientId: number; onC
 
       {err && <div className="rounded-lg bg-dangerpale px-3 py-2 text-sm text-danger">{err}</div>}
 
-      {adding && <Form value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => { setAdding(false); setDraft(empty(clientId)); }} />}
+      {adding && <ShareholderForm value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => { setAdding(false); setDraft(empty(clientId)); }} busy={busy} />}
 
       {rows === null ? (
         <Card><CardBody><div className="text-sm text-muted">Loading…</div></CardBody></Card>
@@ -113,7 +118,7 @@ export function ShareholdersTab({ clientId, onChanged }: { clientId: number; onC
               <tbody>
                 {rows.map((s) => editingId === s.id ? (
                   <tr key={s.id}><td colSpan={7} className="p-4">
-                    <Form value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, s.id)} onCancel={() => { setEditingId(null); setEditDraft({}); }} />
+                    <ShareholderForm value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, s.id)} onCancel={() => { setEditingId(null); setEditDraft({}); }} busy={busy} />
                   </td></tr>
                 ) : (
                   <tr key={s.id} className="border-b border-line text-sm last:border-0">

@@ -11,9 +11,38 @@ import { Label } from "@/components/ui/label";
 import { Empty } from "@/components/ui/empty";
 import { Plus, Trash2, Save, Edit3, Check, AlertCircle, Download, FileText } from "lucide-react";
 import { auditApi, type AuditEntry } from "@/lib/project-api";
+import { backendUrl } from "@/lib/api";
 
 function empty(project_id: number): Partial<AuditEntry> {
   return { project_id, date: new Date().toISOString().slice(0,10), description: "", dr_coa_code: "", cr_coa_code: "", amount: 0, status: "proposed" };
+}
+
+function AuditForm({ value, onChange, onSave, onCancel, busy }: any) {
+  return (
+
+    <Card>
+      <CardBody className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div><Label>Date</Label><Input type="date" value={value.date || ""} onChange={(e: any) => onChange({ ...value, date: e.target.value })} /></div>
+        <div className="lg:col-span-3"><Label>Description *</Label><Input value={value.description || ""} onChange={(e: any) => onChange({ ...value, description: e.target.value })} /></div>
+        <div><Label>Amount *</Label><Input type="number" value={value.amount ?? 0} onChange={(e: any) => onChange({ ...value, amount: Number(e.target.value) })} /></div>
+        <div>
+          <Label>Status</Label>
+          <Select value={value.status || "proposed"} onChange={(e: any) => onChange({ ...value, status: e.target.value })}>
+            <option value="proposed">Proposed</option><option value="approved">Approved</option><option value="posted">Posted</option>
+          </Select>
+        </div>
+        <div className="lg:col-span-3"><Label>Dr CoA Code *</Label><Input value={value.dr_coa_code || ""} onChange={(e: any) => onChange({ ...value, dr_coa_code: e.target.value })} className="font-mono" placeholder="e.g. PL-04-05" /></div>
+        <div className="lg:col-span-3"><Label>Cr CoA Code *</Label><Input value={value.cr_coa_code || ""} onChange={(e: any) => onChange({ ...value, cr_coa_code: e.target.value })} className="font-mono" placeholder="e.g. BS-EL-04-02-09" /></div>
+        <div className="lg:col-span-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button onClick={onSave} disabled={busy || !value.description || !value.dr_coa_code || !value.cr_coa_code}>
+            <Save className="h-4 w-4" />{busy ? "Saving…" : "Save entry"}
+          </Button>
+        </div>
+      </CardBody>
+    </Card>
+  
+  );
 }
 
 export default function AuditPage() {
@@ -57,29 +86,6 @@ export default function AuditPage() {
     try { await auditApi.update(e.id, { status }); reload(); } catch (er: any) { setErr(er?.message || "Status update failed"); }
   }
 
-  const Form = ({ value, onChange, onSave, onCancel }: any) => (
-    <Card>
-      <CardBody className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-        <div><Label>Date</Label><Input type="date" value={value.date || ""} onChange={(e: any) => onChange({ ...value, date: e.target.value })} /></div>
-        <div className="lg:col-span-3"><Label>Description *</Label><Input value={value.description || ""} onChange={(e: any) => onChange({ ...value, description: e.target.value })} /></div>
-        <div><Label>Amount *</Label><Input type="number" value={value.amount ?? 0} onChange={(e: any) => onChange({ ...value, amount: Number(e.target.value) })} /></div>
-        <div>
-          <Label>Status</Label>
-          <Select value={value.status || "proposed"} onChange={(e: any) => onChange({ ...value, status: e.target.value })}>
-            <option value="proposed">Proposed</option><option value="approved">Approved</option><option value="posted">Posted</option>
-          </Select>
-        </div>
-        <div className="lg:col-span-3"><Label>Dr CoA Code *</Label><Input value={value.dr_coa_code || ""} onChange={(e: any) => onChange({ ...value, dr_coa_code: e.target.value })} className="font-mono" placeholder="e.g. PL-04-05" /></div>
-        <div className="lg:col-span-3"><Label>Cr CoA Code *</Label><Input value={value.cr_coa_code || ""} onChange={(e: any) => onChange({ ...value, cr_coa_code: e.target.value })} className="font-mono" placeholder="e.g. BS-EL-04-02-09" /></div>
-        <div className="lg:col-span-6 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
-          <Button onClick={onSave} disabled={busy || !value.description || !value.dr_coa_code || !value.cr_coa_code}>
-            <Save className="h-4 w-4" />{busy ? "Saving…" : "Save entry"}
-          </Button>
-        </div>
-      </CardBody>
-    </Card>
-  );
 
   if (loading || !session) return null;
 
@@ -95,7 +101,7 @@ export default function AuditPage() {
               {check.balanced ? `Balanced (\u20B9${check.dr_total.toLocaleString("en-IN")})` : `Out by \u20B9${(check.dr_total - check.cr_total).toLocaleString("en-IN")}`}
             </span>
           )}
-          <a href={`/api/audit/${projectId}/export`} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface">
+          <a href={backendUrl(`/audit/${projectId}/export`)} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface">
             <Download className="h-3.5 w-3.5" /> Export
           </a>
           <Button size="sm" variant="gold" onClick={() => { setAdding(true); setDraft(empty(projectId)); setEditingId(null); }}>
@@ -105,7 +111,7 @@ export default function AuditPage() {
       }
     >
       {err && <div className="mb-4 rounded-lg bg-dangerpale px-3 py-2 text-sm text-danger">{err}</div>}
-      {adding && <div className="mb-4"><Form value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => setAdding(false)} /></div>}
+      {adding && <div className="mb-4"><AuditForm value={draft} onChange={setDraft} onSave={() => save(draft)} onCancel={() => setAdding(false)} busy={busy} /></div>}
 
       {rows && rows.length > 0 && (
         <Card className="mb-4">
@@ -151,7 +157,7 @@ export default function AuditPage() {
                       || (r.cr_coa_code || "").toLowerCase().includes(q);
                 }).map((r) => editingId === r.id ? (
                   <tr key={r.id}><td colSpan={7} className="p-3 bg-surface/30">
-                    <Form value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, r.id)} onCancel={() => setEditingId(null)} />
+                    <AuditForm value={editDraft} onChange={setEditDraft} onSave={() => save(editDraft, r.id)} onCancel={() => setEditingId(null)} busy={busy} />
                   </td></tr>
                 ) : (
                   <tr key={r.id} className="border-b border-line last:border-0">
