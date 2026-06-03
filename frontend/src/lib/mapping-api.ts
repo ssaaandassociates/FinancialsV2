@@ -92,4 +92,5 @@ export const mappingApi = {
 export const exportPaths = {
   mappedTB:  (projectId: number) => `/export-mapped-tb/${projectId}`,
   tbTemplate: "/tb-template/tally",
+  tbTemplateGeneric: "/tb-template/generic",
 };

@@ -13,6 +13,14 @@ from app.models.client import Client
 router = APIRouter()
 
 
+@router.post("/sample-data/load")
+def load_sample_data_endpoint(db: Session = Depends(get_db),
+                              firm_id: Optional[int] = Depends(get_current_firm_id)):
+    """Load two fully-worked demo companies (idempotent — replaces prior samples)."""
+    from app.services.sample_data_service import load_sample_data
+    return load_sample_data(db, firm_id=firm_id)
+
+
 class ClientCreate(BaseModel):
     name: str
     cin: str | None = None

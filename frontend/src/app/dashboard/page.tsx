@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
+import { loadSampleData } from "@/lib/client-api";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, FolderOpen } from "lucide-react";
+import { Plus, Building2, FolderOpen, Sparkles } from "lucide-react";
 
 interface ClientRow {
   id: number;
@@ -20,6 +21,20 @@ export default function DashboardPage() {
   const [clients, setClients] = useState<ClientRow[] | null>(null);
   const [err, setErr] = useState("");
   const [adding, setAdding] = useState(false);
+  const [loadingSample, setLoadingSample] = useState(false);
+
+  async function handleLoadSample() {
+    if (loadingSample) return;
+    setLoadingSample(true); setErr("");
+    try {
+      await loadSampleData();
+      await load();
+    } catch (e: any) {
+      setErr(e?.message || "Failed to load sample data");
+    } finally {
+      setLoadingSample(false);
+    }
+  }
   const [name, setName] = useState("");
   const [cin, setCin] = useState("");
   const [busy, setBusy] = useState(false);
@@ -67,9 +82,14 @@ export default function DashboardPage() {
             {clients ? `${clients.length} client${clients.length === 1 ? "" : "s"} · ${projectTotal} project${projectTotal === 1 ? "" : "s"}` : "Loading…"}
           </p>
         </div>
-        <Button onClick={() => setAdding((v) => !v)} variant="gold">
-          <Plus className="h-4 w-4" /> {adding ? "Cancel" : "New client"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleLoadSample} variant="outline" disabled={loadingSample}>
+            <Sparkles className="h-4 w-4" /> {loadingSample ? "Loading…" : "Load sample data"}
+          </Button>
+          <Button onClick={() => setAdding((v) => !v)} variant="gold">
+            <Plus className="h-4 w-4" /> {adding ? "Cancel" : "New client"}
+          </Button>
+        </div>
       </div>
 
       {/* Add form (inline, slides in) */}

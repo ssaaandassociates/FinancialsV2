@@ -314,7 +314,10 @@ export default function MappingPage() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => downloadFile(exportPaths.tbTemplate).catch((e) => alert("Download failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
-                <FileDown className="h-4 w-4" /> TB template
+                <FileDown className="h-4 w-4" /> TB template (Tally)
+              </button>
+              <button onClick={() => downloadFile(exportPaths.tbTemplateGeneric).catch((e) => alert("Download failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
+                <FileDown className="h-4 w-4" /> TB template (Generic)
               </button>
               {rows && rows.length > 0 && (
                 <button onClick={() => downloadFile(exportPaths.mappedTB(projectId)).catch((e) => alert("Download failed: " + (e?.message || e)))} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface">

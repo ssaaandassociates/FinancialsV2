@@ -154,3 +154,8 @@ export async function importMasterData(clientId: number, file: File): Promise<Ma
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+
+// ---------- Sample data loader ----------
+export async function loadSampleData(): Promise<{ status: string; companies: { id: number; name: string }[] }> {
+  return apiPost("/sample-data/load", {});
+}

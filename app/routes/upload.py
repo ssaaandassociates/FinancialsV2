@@ -91,11 +91,31 @@ def download_generic_template():
         for c, val in enumerate(row, 1):
             ws.cell(row=r, column=c, value=val)
 
-    # Add CoA reference sheet
+    # Add CoA reference sheet — populated with all standard leaf codes so the
+    # user can copy the exact code into the "CoA Code" column.
     ws2 = wb.create_sheet("CoA Reference")
     ws2.cell(1, 1, "Code")
-    ws2.cell(1, 2, "Description")
-    ws2.cell(1, 3, "Use these codes in 'CoA Code' column of Trial Balance sheet")
+    ws2.cell(1, 2, "Particulars")
+    ws2.cell(1, 3, "Nature")
+    ws2.cell(1, 4, "FS Type")
+    try:
+        from app.database import SessionLocal
+        from app.models import CoAMaster
+        _db = SessionLocal()
+        try:
+            codes = _db.query(CoAMaster).order_by(CoAMaster.code).all()
+            for r, cc in enumerate(codes, 2):
+                ws2.cell(r, 1, cc.code)
+                ws2.cell(r, 2, cc.particulars)
+                ws2.cell(r, 3, getattr(cc, "nature", "") or "")
+                ws2.cell(r, 4, getattr(cc, "fs_type", "") or "")
+        finally:
+            _db.close()
+    except Exception:
+        ws2.cell(2, 1, "(Could not load CoA list — see app for codes)")
+    # widen columns
+    ws2.column_dimensions["A"].width = 18
+    ws2.column_dimensions["B"].width = 45
 
     path = os.path.join("output", "TB_Template_Generic.xlsx")
     os.makedirs("output", exist_ok=True)
