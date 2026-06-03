@@ -1,9 +1,13 @@
 import { supabase } from "./supabase";
 
+// Backend URL is read at BUILD time from NEXT_PUBLIC_BACKEND_URL.
+// Set in Railway Variables on the frontend service.
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+
 /**
  * Thin fetch wrapper that automatically attaches the current Supabase
- * access token as a Bearer header. All calls go to /api/* which Next.js
- * rewrites to the FastAPI backend.
+ * access token as a Bearer header. Calls the backend directly when
+ * BACKEND is set; falls back to /api/* path (for local dev with rewrites).
  */
 async function authHeaders(): Promise<HeadersInit> {
   const { data } = await supabase.auth.getSession();
@@ -13,14 +17,18 @@ async function authHeaders(): Promise<HeadersInit> {
   return headers;
 }
 
+function url(path: string) {
+  return BACKEND ? `${BACKEND}/api${path}` : `/api${path}`;
+}
+
 export async function apiGet<T = any>(path: string): Promise<T> {
-  const res = await fetch(`/api${path}`, { headers: await authHeaders() });
+  const res = await fetch(url(path), { headers: await authHeaders() });
   if (!res.ok) throw new ApiError(res.status, await safeText(res));
   return res.json();
 }
 
 export async function apiPost<T = any>(path: string, body?: any): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(url(path), {
     method: "POST",
     headers: await authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -30,7 +38,7 @@ export async function apiPost<T = any>(path: string, body?: any): Promise<T> {
 }
 
 export async function apiPut<T = any>(path: string, body?: any): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(url(path), {
     method: "PUT",
     headers: await authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -40,7 +48,7 @@ export async function apiPut<T = any>(path: string, body?: any): Promise<T> {
 }
 
 export async function apiDelete<T = any>(path: string, body?: any): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(url(path), {
     method: "DELETE",
     headers: await authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
