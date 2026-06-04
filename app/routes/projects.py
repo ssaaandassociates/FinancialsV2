@@ -50,7 +50,7 @@ class ClientUpdate(BaseModel):
     pan: str | None = None
     gstin: str | None = None
     principal_activity: str | None = None
-    date_of_incorporation: date | None = None
+    date_of_incorporation: str | None = None  # accept "" or "YYYY-MM-DD"; parsed in service
     registered_office: str | None = None
     auditor_name: str | None = None
     auditor_frn: str | None = None
@@ -272,7 +272,7 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 # ============= DIRECTORS (with is_kmp, signs_financials) =============
 
 class DirectorInput(BaseModel):
-    client_id: int
+    client_id: int | None = None
     name: str
     din: str | None = None
     designation: str = "Director"
@@ -287,6 +287,8 @@ class DirectorInput(BaseModel):
 def add_director(payload: DirectorInput, db: Session = Depends(get_db)):
     from app.models.client import Director
     from datetime import datetime
+    if not payload.client_id:
+        raise HTTPException(422, "client_id is required to create a director")
     doa = None
     if payload.date_of_appointment:
         try:
@@ -356,7 +358,7 @@ def list_kmp(client_id: int, db: Session = Depends(get_db)):
 # ============= CLIENT-LEVEL SHAREHOLDERS =============
 
 class ShareholderInput(BaseModel):
-    client_id: int
+    client_id: int | None = None
     name: str
     no_of_shares_cy: int = 0
     no_of_shares_py: int = 0
@@ -470,7 +472,7 @@ def _recompute_holdings(db, client_id):
 # ============= CUSTOM COA CODES (client level) =============
 
 class CustomCoAInput(BaseModel):
-    client_id: int
+    client_id: int | None = None
     code: str
     particulars: str
     parent_code: str | None = None
@@ -591,7 +593,7 @@ async def restore_db(file: UploadFile = File(...)):
 # ============= CLIENT-LEVEL POLICIES CRUD =============
 
 class ClientPolicyInput(BaseModel):
-    client_id: int
+    client_id: int | None = None
     policy_number: int
     title: str
     body: str

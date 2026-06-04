@@ -74,7 +74,12 @@ def update_client(db: Session, client_id: int, **updates) -> Client:
     for k, v in updates.items():
         if k in allowed and v is not None:
             if k == 'date_of_incorporation' and isinstance(v, str):
-                v = datetime.fromisoformat(v).date()
+                if not v.strip():
+                    continue  # empty string -> leave unchanged
+                try:
+                    v = datetime.fromisoformat(v).date()
+                except ValueError:
+                    continue  # unparseable -> skip rather than crash
             setattr(c, k, v)
 
     db.commit()
